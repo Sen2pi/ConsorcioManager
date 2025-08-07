@@ -182,18 +182,26 @@ router.post('/consorcios/:id/contemplar', authenticateToken, async (req, res) =>
 
     const { participanteIds, mes_contemplacao } = req.body;
 
-    // Verificar se o mês já foi contemplado
-    const contemplacaoExistente = await Contemplacao.findOne({
+    // Verificar quantas contemplações já existem neste mês
+    const contemplacoesExistentes = await Contemplacao.findAll({
       where: {
         consorcioId: consorcio.id,
         mes_contemplacao
       }
     });
 
-    if (contemplacaoExistente) {
-      return res.status(409).json({ 
-        message: 'Mês já contemplado' 
+    // Calcular cotas já contempladas neste mês
+    let cotasJaContempladas = 0;
+    for (const contemplacao of contemplacoesExistentes) {
+      const participanteContemplado = await ConsorcioParticipante.findOne({
+        where: {
+          consorcioId: consorcio.id,
+          participanteId: contemplacao.participanteId
+        }
       });
+      if (participanteContemplado) {
+        cotasJaContempladas += parseFloat(participanteContemplado.numero_cotas);
+      }
     }
 
     // Verificar se todos os participantes existem no consórcio
@@ -222,10 +230,11 @@ router.post('/consorcios/:id/contemplar', authenticateToken, async (req, res) =>
     // Calcular total de cotas dos participantes
     const totalCotas = participantes.reduce((sum, p) => sum + parseFloat(p.numero_cotas), 0);
     
-    // Verificar se o total de cotas é válido (deve ser 1.0 para contemplação)
-    if (Math.abs(totalCotas - 1.0) > 0.01) {
+    // Verificar se o total de cotas junto com as já contempladas não excede 1.0
+    const totalCotasComContempladas = cotasJaContempladas + totalCotas;
+    if (totalCotasComContempladas > 1.0 + 0.01) {
       return res.status(400).json({ 
-        message: `Total de cotas deve ser 1.0, mas é ${totalCotas}` 
+        message: `Total de cotas (${totalCotasComContempladas.toFixed(2)}) excederia 1.0 para este mês. Cotas já contempladas: ${cotasJaContempladas.toFixed(2)}` 
       });
     }
 
@@ -233,20 +242,22 @@ router.post('/consorcios/:id/contemplar', authenticateToken, async (req, res) =>
     const dataContemplacao = new Date(dataInicio);
     dataContemplacao.setMonth(dataInicio.getMonth() + mes_contemplacao - 1);
 
-    // Criar contemplação para o primeiro participante
-    const contemplacao = await Contemplacao.create({
-      consorcioId: consorcio.id,
-      participanteId: participanteIds[0], // Usar o primeiro participante como principal
-      mes_contemplacao,
-      data_contemplacao: dataContemplacao,
-      valor_contemplado: consorcio.montante_total,
-      tipo_contemplacao: req.body.tipo_contemplacao,
-      valor_lance: req.body.valor_lance,
-      observacoes: req.body.observacoes
-    });
-
-    // Atualizar todos os participantes como contemplados
+    // Criar contemplação para cada participante
+    const contemplacoesCreated = [];
     for (const participanteId of participanteIds) {
+      const contemplacao = await Contemplacao.create({
+        consorcioId: consorcio.id,
+        participanteId,
+        mes_contemplacao,
+        data_contemplacao: dataContemplacao,
+        valor_contemplado: consorcio.montante_total,
+        tipo_contemplacao: req.body.tipo_contemplacao,
+        valor_lance: req.body.valor_lance,
+        observacoes: req.body.observacoes
+      });
+      contemplacoesCreated.push(contemplacao);
+
+      // Atualizar participante como contemplado
       await ConsorcioParticipante.update(
         { 
           contemplado: true, 
@@ -264,7 +275,7 @@ router.post('/consorcios/:id/contemplar', authenticateToken, async (req, res) =>
 
     res.json({
       message: 'Contemplação criada com sucesso',
-      contemplacao
+      contemplacoes: contemplacoesCreated
     });
 
   } catch (error) {
@@ -459,20 +470,19 @@ router.post('/consorcios/:id/auto-contemplar', authenticateToken, async (req, re
       include: [{ model: Participante, attributes: ['nome'] }]
     });
 
-    console.log('Todos os participantes:', todosParticipantes.map(p => ({
-      nome: p.Participante.nome,
-      cotas: p.numero_cotas,
-      contemplado: p.contemplado,
-      mes: p.mes_contemplacao
-    })));
+    // Verificar quantas vezes cada participante já foi contemplado
+    const contemplacoesExistentes = await Contemplacao.findAll({
+      where: { consorcioId: consorcio.id }
+    });
+
+    const contemplacoesPorParticipante = {};
+    for (const contemplacao of contemplacoesExistentes) {
+      const pid = contemplacao.participanteId;
+      contemplacoesPorParticipante[pid] = (contemplacoesPorParticipante[pid] || 0) + 1;
+    }
 
     // Filtrar apenas não contemplados
     const participantes = todosParticipantes.filter(p => !p.contemplado);
-
-    console.log('Participantes não contemplados:', participantes.map(p => ({
-      nome: p.Participante.nome,
-      cotas: p.numero_cotas
-    })));
 
     if (participantes.length === 0) {
       return res.status(400).json({ 
@@ -482,9 +492,6 @@ router.post('/consorcios/:id/auto-contemplar', authenticateToken, async (req, re
 
     // Calcular total de cotas disponíveis
     const totalCotas = participantes.reduce((sum, p) => sum + parseFloat(p.numero_cotas), 0);
-    
-    console.log('Total de cotas disponíveis:', totalCotas);
-    console.log('Prazo do consórcio:', consorcio.prazo_meses);
     
     if (totalCotas > consorcio.prazo_meses) {
       return res.status(400).json({ 
@@ -498,8 +505,6 @@ router.post('/consorcios/:id/auto-contemplar', authenticateToken, async (req, re
 
     for (const participante of participantes) {
       const numeroCotas = parseFloat(participante.numero_cotas);
-      console.log(`Participante ${participante.Participante.nome}: ${numeroCotas} cotas`);
-      
       if (numeroCotas >= 1.0) {
         // Participantes com 1 ou mais cotas
         const cotasInteiras = Math.floor(numeroCotas);
@@ -527,16 +532,6 @@ router.post('/consorcios/:id/auto-contemplar', authenticateToken, async (req, re
       }
     }
 
-    console.log('Participantes com cotas inteiras:', participantesCotasInteiras.map(p => ({
-      nome: p.participante.Participante.nome,
-      cotas: p.cotas
-    })));
-
-    console.log('Participantes com cotas fracionárias:', participantesCotasFracionarias.map(p => ({
-      nome: p.participante.Participante.nome,
-      cotas: p.cotas
-    })));
-
     // Embaralhar listas
     const cotasInteirasEmbaralhadas = participantesCotasInteiras.sort(() => Math.random() - 0.5);
     const cotasFracionariasEmbaralhadas = participantesCotasFracionarias.sort(() => Math.random() - 0.5);
@@ -544,8 +539,6 @@ router.post('/consorcios/:id/auto-contemplar', authenticateToken, async (req, re
     // Criar lista de meses disponíveis
     const mesesDisponiveis = Array.from({ length: consorcio.prazo_meses }, (_, i) => i + 1);
     const mesesEmbaralhados = mesesDisponiveis.sort(() => Math.random() - 0.5);
-
-    console.log('Meses embaralhados:', mesesEmbaralhados);
 
     const contemplacoesGeradas = [];
     let mesIndex = 0;
@@ -555,8 +548,6 @@ router.post('/consorcios/:id/auto-contemplar', authenticateToken, async (req, re
       if (mesIndex >= mesesEmbaralhados.length) break;
 
       const mesContemplacao = mesesEmbaralhados[mesIndex];
-      console.log(`Contemplando ${participanteCota.participante.Participante.nome} (${participanteCota.cotas} cotas) no mês ${mesContemplacao}`);
-
       const dataInicio = new Date(consorcio.data_inicio);
       const dataContemplacao = new Date(dataInicio);
       dataContemplacao.setMonth(dataInicio.getMonth() + mesContemplacao - 1);
@@ -570,19 +561,7 @@ router.post('/consorcios/:id/auto-contemplar', authenticateToken, async (req, re
         tipo_contemplacao: 'automatico'
       });
 
-      await ConsorcioParticipante.update(
-        { 
-          contemplado: true, 
-          mes_contemplacao: mesContemplacao,
-          status_pagamento: 'contemplado'
-        },
-        {
-          where: {
-            consorcioId: consorcio.id,
-            participanteId: participanteCota.participante.participanteId
-          }
-        }
-      );
+      // Não marcar como contemplado ainda - participante pode ter mais cotas
 
       contemplacoesGeradas.push(contemplacao);
       mesIndex++;
@@ -603,21 +582,23 @@ router.post('/consorcios/:id/auto-contemplar', authenticateToken, async (req, re
           if (mesIndex >= mesesEmbaralhados.length) break;
 
           const mesContemplacao = mesesEmbaralhados[mesIndex];
-          console.log(`Contemplando grupo no mês ${mesContemplacao}:`, grupoAtual.map(p => p.participante.Participante.nome));
-
           const dataInicio = new Date(consorcio.data_inicio);
           const dataContemplacao = new Date(dataInicio);
           dataContemplacao.setMonth(dataInicio.getMonth() + mesContemplacao - 1);
 
-          // Criar contemplação para o primeiro participante do grupo
-          const contemplacao = await Contemplacao.create({
-            consorcioId: consorcio.id,
-            participanteId: grupoAtual[0].participante.participanteId,
-            mes_contemplacao: mesContemplacao,
-            data_contemplacao: dataContemplacao,
-            valor_contemplado: consorcio.montante_total,
-            tipo_contemplacao: 'automatico'
-          });
+          // Criar contemplação para cada participante do grupo
+          for (const participante of grupoAtual) {
+            const contemplacao = await Contemplacao.create({
+              consorcioId: consorcio.id,
+              participanteId: participante.participante.participanteId,
+              mes_contemplacao: mesContemplacao,
+              data_contemplacao: dataContemplacao,
+              valor_contemplado: consorcio.montante_total,
+              tipo_contemplacao: 'automatico'
+            });
+
+            contemplacoesGeradas.push(contemplacao);
+          }
 
           // Atualizar todos os participantes do grupo
           for (const participante of grupoAtual) {
@@ -636,7 +617,6 @@ router.post('/consorcios/:id/auto-contemplar', authenticateToken, async (req, re
             );
           }
 
-          contemplacoesGeradas.push(contemplacao);
           mesIndex++;
         }
 
@@ -649,20 +629,23 @@ router.post('/consorcios/:id/auto-contemplar', authenticateToken, async (req, re
     // Processar último grupo se não estiver vazio
     if (grupoAtual.length > 0 && mesIndex < mesesEmbaralhados.length) {
       const mesContemplacao = mesesEmbaralhados[mesIndex];
-      console.log(`Contemplando último grupo no mês ${mesContemplacao}:`, grupoAtual.map(p => p.participante.Participante.nome));
-
       const dataInicio = new Date(consorcio.data_inicio);
       const dataContemplacao = new Date(dataInicio);
       dataContemplacao.setMonth(dataInicio.getMonth() + mesContemplacao - 1);
 
-      const contemplacao = await Contemplacao.create({
-        consorcioId: consorcio.id,
-        participanteId: grupoAtual[0].participante.participanteId,
-        mes_contemplacao: mesContemplacao,
-        data_contemplacao: dataContemplacao,
-        valor_contemplado: consorcio.montante_total,
-        tipo_contemplacao: 'automatico'
-      });
+      // Criar contemplação para cada participante do grupo
+      for (const participante of grupoAtual) {
+        const contemplacao = await Contemplacao.create({
+          consorcioId: consorcio.id,
+          participanteId: participante.participante.participanteId,
+          mes_contemplacao: mesContemplacao,
+          data_contemplacao: dataContemplacao,
+          valor_contemplado: consorcio.montante_total,
+          tipo_contemplacao: 'automatico'
+        });
+
+        contemplacoesGeradas.push(contemplacao);
+      }
 
       for (const participante of grupoAtual) {
         await ConsorcioParticipante.update(
@@ -679,11 +662,44 @@ router.post('/consorcios/:id/auto-contemplar', authenticateToken, async (req, re
           }
         );
       }
-
-      contemplacoesGeradas.push(contemplacao);
     }
 
-    console.log('Contemplações geradas:', contemplacoesGeradas.length);
+    // Atualizar status dos participantes que foram totalmente contemplados
+    const participantesContemplados = new Map();
+    for (const contemplacao of contemplacoesGeradas) {
+      const participanteId = contemplacao.participanteId;
+      if (!participantesContemplados.has(participanteId)) {
+        participantesContemplados.set(participanteId, []);
+      }
+      participantesContemplados.get(participanteId).push(contemplacao);
+    }
+
+    // Para cada participante, verificar se todas as cotas foram contempladas
+    for (const [participanteId, contemplacoesParticipante] of participantesContemplados) {
+      const participante = participantes.find(p => p.participanteId === participanteId);
+      if (participante) {
+        const totalCotasContempladas = contemplacoesParticipante.length;
+        const totalCotasParticipante = parseFloat(participante.numero_cotas);
+        
+        // Se contemplou todas as cotas (aproximadamente), marcar como contemplado
+        if (totalCotasContempladas >= Math.floor(totalCotasParticipante)) {
+          const ultimaContemplacao = contemplacoesParticipante[contemplacoesParticipante.length - 1];
+          await ConsorcioParticipante.update(
+            { 
+              contemplado: true, 
+              mes_contemplacao: ultimaContemplacao.mes_contemplacao,
+              status_pagamento: 'contemplado'
+            },
+            {
+              where: {
+                consorcioId: consorcio.id,
+                participanteId
+              }
+            }
+          );
+        }
+      }
+    }
 
     res.json({
       message: `${contemplacoesGeradas.length} contemplações geradas automaticamente`,

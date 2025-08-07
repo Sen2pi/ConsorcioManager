@@ -22,7 +22,7 @@ if (process.env.NODE_ENV === 'test') {
       host: process.env.DB_HOST || 'localhost',
       port: process.env.DB_PORT || 3306,
       dialect: 'mysql',
-      logging: process.env.NODE_ENV === 'development' ? console.log : false,
+      logging: false,
       pool: {
         max: 10,
         min: 0,

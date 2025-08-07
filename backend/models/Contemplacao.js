@@ -74,8 +74,7 @@ const Contemplacao = sequelize.define('Contemplacao', {
       fields: ['data_contemplacao']
     },
     {
-      unique: true,
-      fields: ['consorcioId', 'mes_contemplacao']
+      fields: ['consorcioId', 'participanteId', 'mes_contemplacao']
     }
   ]
 });

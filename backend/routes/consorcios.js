@@ -233,7 +233,6 @@ router.put('/:id', authenticateToken, async (req, res) => {
       // Recriar pagamentos com novos valores
       await PagamentoService.recriarPagamentosConsorcio(consorcio.id);
 
-      console.log(`Recalculados valores individuais e pagamentos para ${participantes.length} participantes`);
     }
 
     res.json({
