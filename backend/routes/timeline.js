@@ -43,21 +43,25 @@ router.get('/consorcios/:id/timeline', authenticateToken, async (req, res) => {
       include: [{ model: Participante, attributes: ['nome'] }]
     });
 
-    // Agrupar participantes contemplados por mês
-    const participantesContemplados = participantes.filter(p => p.contemplado);
+    // Agrupar contemplações por mês (baseado nas contemplações, não nos participantes)
     const contemplacoesPorMes = {};
 
-    for (const participante of participantesContemplados) {
-      const mes = participante.mes_contemplacao;
+    for (const contemplacao of contemplacoes) {
+      const mes = contemplacao.mes_contemplacao;
       if (!contemplacoesPorMes[mes]) {
         contemplacoesPorMes[mes] = [];
       }
-      contemplacoesPorMes[mes].push({
-        id: participante.participanteId,
-        nome: participante.Participante.nome,
-        cotas: participante.numero_cotas,
-        contemplacaoId: contemplacoes.find(c => c.participanteId === participante.participanteId && c.mes_contemplacao === mes)?.id
-      });
+      
+      // Encontrar dados do participante
+      const participante = participantes.find(p => p.participanteId === contemplacao.participanteId);
+      if (participante) {
+        contemplacoesPorMes[mes].push({
+          id: contemplacao.participanteId,
+          nome: contemplacao.Participante.nome,
+          cotas: participante.numero_cotas,
+          contemplacaoId: contemplacao.id
+        });
+      }
     }
 
     const totalCotas = participantes.reduce((sum, p) => sum + parseFloat(p.numero_cotas), 0);
@@ -532,6 +536,7 @@ router.post('/consorcios/:id/auto-contemplar', authenticateToken, async (req, re
       }
     }
 
+
     // Embaralhar listas
     const cotasInteirasEmbaralhadas = participantesCotasInteiras.sort(() => Math.random() - 0.5);
     const cotasFracionariasEmbaralhadas = participantesCotasFracionarias.sort(() => Math.random() - 0.5);
@@ -548,6 +553,7 @@ router.post('/consorcios/:id/auto-contemplar', authenticateToken, async (req, re
       if (mesIndex >= mesesEmbaralhados.length) break;
 
       const mesContemplacao = mesesEmbaralhados[mesIndex];
+
       const dataInicio = new Date(consorcio.data_inicio);
       const dataContemplacao = new Date(dataInicio);
       dataContemplacao.setMonth(dataInicio.getMonth() + mesContemplacao - 1);

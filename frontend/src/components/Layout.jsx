@@ -71,11 +71,8 @@ const Layout = () => {
           <img 
             src="/logo.png" 
             alt="Logo" 
-            style={{ height: 40, marginRight: 12 }}
+            style={{ height: 200, marginRight: 12 }}
           />
-          <Typography variant="h6" sx={{ color: 'white' }}>
-            Consórcio Gestão
-          </Typography>
         </Box>
       </Toolbar>
       <Divider />
