@@ -8,19 +8,26 @@ const router = express.Router();
 
 const consorcioSchema = Joi.object({
   nome: Joi.string().min(2).max(150).required(),
-  montante_total: Joi.number().positive().required(),
+  montante_total: Joi.number().min(0).required(),
   prazo_meses: Joi.number().integer().min(1).max(120).required(),
   numero_cotas: Joi.number().integer().min(1).required(),
+  taxa_gestor: Joi.number().min(0).optional(),
+  acrescimo_mensal: Joi.number().min(0).optional(),
+  status: Joi.string().valid('ativo', 'fechado', 'cancelado').optional(),
   data_inicio: Joi.date().required(),
+  data_fim: Joi.date().optional(),
   descricao: Joi.string().optional()
 });
 
 const updateConsorcioSchema = Joi.object({
   nome: Joi.string().min(2).max(150).optional(),
-  montante_total: Joi.number().positive().optional(),
+  montante_total: Joi.number().min(0).optional(),
   prazo_meses: Joi.number().integer().min(1).max(120).optional(),
   numero_cotas: Joi.number().integer().min(1).optional(),
+  taxa_gestor: Joi.number().min(0).optional(),
+  acrescimo_mensal: Joi.number().min(0).optional(),
   status: Joi.string().valid('ativo', 'fechado', 'cancelado').optional(),
+  data_inicio: Joi.date().optional(),
   data_fim: Joi.date().optional(),
   descricao: Joi.string().optional()
 });
@@ -282,6 +289,8 @@ router.post('/:id/participantes', authenticateToken, async (req, res) => {
 
 router.delete('/:id/participantes/:participanteId', authenticateToken, async (req, res) => {
   try {
+    const { Pagamento, Contemplacao } = require('../models');
+    
     const consorcio = await Consorcio.findOne({
       where: {
         id: req.params.id,
@@ -305,6 +314,23 @@ router.delete('/:id/participantes/:participanteId', authenticateToken, async (re
       return res.status(404).json({ message: 'Participante não encontrado neste consórcio' });
     }
 
+    // Remover todos os pagamentos do participante neste consórcio
+    await Pagamento.destroy({
+      where: {
+        consorcioId: consorcio.id,
+        participanteId: req.params.participanteId
+      }
+    });
+
+    // Remover todas as contemplações do participante neste consórcio
+    await Contemplacao.destroy({
+      where: {
+        consorcioId: consorcio.id,
+        participanteId: req.params.participanteId
+      }
+    });
+
+    // Remover da associação consórcio-participante
     await associacao.update({ ativo: false, data_saida: new Date() });
 
     res.json({ message: 'Participante removido do consórcio com sucesso' });

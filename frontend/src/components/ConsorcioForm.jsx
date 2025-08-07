@@ -25,6 +25,8 @@ const ConsorcioForm = ({ consorcio, onSuccess, onCancel }) => {
     montante_total: '',
     prazo_meses: '',
     numero_cotas: '',
+    taxa_gestor: 0.00,
+    acrescimo_mensal: 0.00,
     status: 'ativo',
     data_inicio: dayjs(),
     data_fim: null,
@@ -40,6 +42,8 @@ const ConsorcioForm = ({ consorcio, onSuccess, onCancel }) => {
         montante_total: consorcio.montante_total || '',
         prazo_meses: consorcio.prazo_meses || '',
         numero_cotas: consorcio.numero_cotas || '',
+        taxa_gestor: consorcio.taxa_gestor || 0.00,
+        acrescimo_mensal: consorcio.acrescimo_mensal || 0.00,
         status: consorcio.status || 'ativo',
         data_inicio: consorcio.data_inicio ? dayjs(consorcio.data_inicio) : dayjs(),
         data_fim: consorcio.data_fim ? dayjs(consorcio.data_fim) : null,
@@ -55,6 +59,8 @@ const ConsorcioForm = ({ consorcio, onSuccess, onCancel }) => {
         montante_total: parseFloat(data.montante_total),
         prazo_meses: parseInt(data.prazo_meses),
         numero_cotas: parseInt(data.numero_cotas),
+        taxa_gestor: parseFloat(data.taxa_gestor),
+        acrescimo_mensal: parseFloat(data.acrescimo_mensal),
         data_inicio: data.data_inicio.format('YYYY-MM-DD'),
         data_fim: data.data_fim ? data.data_fim.format('YYYY-MM-DD') : null,
       };
@@ -82,7 +88,26 @@ const ConsorcioForm = ({ consorcio, onSuccess, onCancel }) => {
   );
 
   const handleChange = (field, value) => {
-    setFormData({ ...formData, [field]: value });
+    const newFormData = { ...formData, [field]: value };
+    
+    // Calcular data de fim automaticamente baseada no prazo
+    if (field === 'prazo_meses' && value && newFormData.data_inicio) {
+      const dataFim = newFormData.data_inicio.add(parseInt(value), 'month');
+      newFormData.data_fim = dataFim;
+    }
+    
+    // Calcular data de fim se data_inicio mudar e prazo_meses existir
+    if (field === 'data_inicio' && value && newFormData.prazo_meses) {
+      const dataFim = value.add(parseInt(newFormData.prazo_meses), 'month');
+      newFormData.data_fim = dataFim;
+    }
+    
+    // Definir número de cotas igual ao prazo em meses
+    if (field === 'prazo_meses' && value) {
+      newFormData.numero_cotas = value;
+    }
+    
+    setFormData(newFormData);
     setError('');
   };
 
@@ -94,8 +119,8 @@ const ConsorcioForm = ({ consorcio, onSuccess, onCancel }) => {
       return;
     }
     
-    if (!formData.montante_total || parseFloat(formData.montante_total) <= 0) {
-      setError('Montante total deve ser maior que zero');
+    if (formData.montante_total === '' || formData.montante_total < 0) {
+      setError('Montante total deve ser maior ou igual a zero');
       return;
     }
     
@@ -157,10 +182,15 @@ const ConsorcioForm = ({ consorcio, onSuccess, onCancel }) => {
               fullWidth
               id="montante_total"
               label="Montante Total"
-              value={formData.montante_total ? formData.montante_total.toLocaleString('pt-BR') : ''}
+              value={formData.montante_total !== '' ? formData.montante_total.toLocaleString('pt-BR') : ''}
               onChange={(e) => {
                 const value = e.target.value.replace(/\D/g, '');
-                handleChange('montante_total', parseFloat(value) / 100 || '');
+                if (value === '') {
+                  handleChange('montante_total', '');
+                } else {
+                  const numericValue = parseFloat(value);
+                  handleChange('montante_total', numericValue);
+                }
               }}
               InputProps={{
                 startAdornment: <InputAdornment position="start">R$</InputAdornment>,
@@ -194,6 +224,65 @@ const ConsorcioForm = ({ consorcio, onSuccess, onCancel }) => {
               onChange={(e) => handleChange('numero_cotas', e.target.value)}
               inputProps={{ min: 1 }}
               error={!formData.numero_cotas && mutation.isError}
+              helperText="Automaticamente igual ao prazo em meses"
+            />
+          </Grid>
+
+          <Grid item xs={12} sm={6}>
+            <TextField
+              fullWidth
+              id="taxa_gestor"
+              label="Taxa do Gestor (Mensal)"
+              type="number"
+              value={formData.taxa_gestor !== '' ? formData.taxa_gestor : ''}
+              onChange={(e) => {
+                const value = e.target.value;
+                if (value === '') {
+                  handleChange('taxa_gestor', '');
+                } else {
+                  const numericValue = parseFloat(value);
+                  if (!isNaN(numericValue)) {
+                    handleChange('taxa_gestor', numericValue);
+                  }
+                }
+              }}
+              InputProps={{
+                startAdornment: <InputAdornment position="start">R$</InputAdornment>,
+              }}
+              inputProps={{
+                min: 0,
+                step: 0.01
+              }}
+              helperText="Taxa mensal do gestor em reais"
+            />
+          </Grid>
+
+          <Grid item xs={12} sm={6}>
+            <TextField
+              fullWidth
+              id="acrescimo_mensal"
+              label="Acréscimo Mensal"
+              type="number"
+              value={formData.acrescimo_mensal !== '' ? formData.acrescimo_mensal : ''}
+              onChange={(e) => {
+                const value = e.target.value;
+                if (value === '') {
+                  handleChange('acrescimo_mensal', '');
+                } else {
+                  const numericValue = parseFloat(value);
+                  if (!isNaN(numericValue)) {
+                    handleChange('acrescimo_mensal', numericValue);
+                  }
+                }
+              }}
+              InputProps={{
+                startAdornment: <InputAdornment position="start">R$</InputAdornment>,
+              }}
+              inputProps={{
+                min: 0,
+                step: 0.01
+              }}
+              helperText="Valor adicional mensal para todos os participantes"
             />
           </Grid>
 
@@ -225,10 +314,11 @@ const ConsorcioForm = ({ consorcio, onSuccess, onCancel }) => {
 
           <Grid item xs={12} sm={6}>
             <DatePicker
-              label="Data de Fim (opcional)"
+              label="Data de Fim"
               value={formData.data_fim}
               onChange={(newValue) => handleChange('data_fim', newValue)}
               renderInput={(params) => <TextField {...params} fullWidth />}
+              helperText="Calculada automaticamente baseada no prazo"
             />
           </Grid>
 

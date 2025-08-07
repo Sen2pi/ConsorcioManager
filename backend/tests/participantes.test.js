@@ -58,7 +58,7 @@ describe('Participantes Routes', () => {
       });
 
       const response = await request(app)
-        .get('/api/participantes?search=João')
+        .get('/api/participantes?search=Silva')
         .set('Authorization', `Bearer ${token}`);
 
       validateSuccessResponse(response);

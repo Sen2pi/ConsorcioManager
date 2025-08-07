@@ -9,6 +9,7 @@ import Dashboard from './pages/Dashboard';
 import Participantes from './pages/Participantes';
 import Consorcios from './pages/Consorcios';
 import ConsorcioDetalhes from './pages/ConsorcioDetalhes';
+import EditarConsorcio from './pages/EditarConsorcio';
 import ParticipanteDetalhes from './pages/ParticipanteDetalhes';
 
 const ProtectedRoute = ({ children }) => {
@@ -73,6 +74,7 @@ function App() {
         <Route path="participantes/:id" element={<ParticipanteDetalhes />} />
         <Route path="consorcios" element={<Consorcios />} />
         <Route path="consorcios/:id" element={<ConsorcioDetalhes />} />
+        <Route path="consorcios/:id/edit" element={<EditarConsorcio />} />
       </Route>
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>

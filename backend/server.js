@@ -2,12 +2,14 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
-require('dotenv').config();
+const setupDatabase = require('./config/setupDatabase');
+const { iniciarJobs } = require('./jobs/verificarPagamentos');
 
 const authRoutes = require('./routes/auth');
 const gestorRoutes = require('./routes/gestores');
 const participanteRoutes = require('./routes/participantes');
 const consorcioRoutes = require('./routes/consorcios');
+const timelineRoutes = require('./routes/timeline');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -30,6 +32,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/gestores', gestorRoutes);
 app.use('/api/participantes', participanteRoutes);
 app.use('/api/consorcios', consorcioRoutes);
+app.use('/api/timeline', timelineRoutes);
 
 app.use((err, req, res, next) => {
   console.error(err.stack);
@@ -45,8 +48,15 @@ app.use((req, res) => {
 
 // Só iniciar o servidor se não estiver em modo de teste
 if (process.env.NODE_ENV !== 'test') {
-  app.listen(PORT, () => {
-    console.log(`Servidor rodando na porta ${PORT}`);
+  setupDatabase().then(() => {
+    app.listen(PORT, () => {
+      console.log(`Servidor rodando na porta ${PORT}`);
+      // Iniciar jobs de verificação
+      iniciarJobs();
+    });
+  }).catch(error => {
+    console.error('Falha ao inicializar:', error);
+    process.exit(1);
   });
 }
 

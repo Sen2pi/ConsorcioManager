@@ -4,8 +4,8 @@ const { Gestor, Participante, Consorcio, ConsorcioParticipante } = require('../m
 // Configurar banco de dados de teste
 const setupTestDatabase = async () => {
   try {
-    // Sincronizar modelos sem forçar drop (cria tabelas se não existirem)
-    await sequelize.sync({ force: false });
+    // Sincronizar modelos com força para garantir tabelas limpas
+    await sequelize.sync({ force: true });
     console.log('✅ Banco de dados de teste configurado');
   } catch (error) {
     console.error('❌ Erro ao configurar banco de teste:', error);

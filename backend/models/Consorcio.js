@@ -19,7 +19,7 @@ const Consorcio = sequelize.define('Consorcio', {
     type: DataTypes.DECIMAL(15, 2),
     allowNull: false,
     validate: {
-      min: 0.01
+      min: 0
     }
   },
   prazo_meses: {
@@ -35,6 +35,22 @@ const Consorcio = sequelize.define('Consorcio', {
     allowNull: false,
     validate: {
       min: 1
+    }
+  },
+  taxa_gestor: {
+    type: DataTypes.DECIMAL(10, 2),
+    allowNull: false,
+    defaultValue: 0.00,
+    validate: {
+      min: 0
+    }
+  },
+  acrescimo_mensal: {
+    type: DataTypes.DECIMAL(10, 2),
+    allowNull: false,
+    defaultValue: 0.00,
+    validate: {
+      min: 0
     }
   },
   status: {

@@ -46,6 +46,7 @@ import {
 } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
 import api from '../services/api';
+import ConsorcioTimeline from '../components/ConsorcioTimeline';
 
 const ConsorcioDetalhes = () => {
   const { id } = useParams();
@@ -60,6 +61,24 @@ const ConsorcioDetalhes = () => {
     numero_cotas: 1,
     montante_individual: '',
   });
+
+  const calcularMontanteIndividual = (numeroCotas) => {
+    if (!consorcio || !numeroCotas) return 0;
+    
+    const montanteTotal = parseFloat(consorcio.montante_total) || 0;
+    const taxaGestorMensal = parseFloat(consorcio.taxa_gestor) || 0;
+    const acrescimoMensal = parseFloat(consorcio.acrescimo_mensal) || 0;
+    const prazoMeses = parseInt(consorcio.prazo_meses) || 1;
+    const numeroTotalCotas = parseInt(consorcio.numero_cotas) || 1;
+    
+    // (montante total + (taxa gestor mensal * numero de meses)) dividido por numero total cotas * cotas do participante + acréscimo mensal
+    const montanteComTaxa = montanteTotal + (taxaGestorMensal * prazoMeses);
+    const valorPorCota = montanteComTaxa / numeroTotalCotas;
+    const valorMensalBase = valorPorCota * numeroCotas;
+    const valorFinal = valorMensalBase + (acrescimoMensal * numeroCotas);
+    
+    return valorFinal.toFixed(2);
+  };
 
   const { data, isLoading, error } = useQuery(
     ['consorcio', id],
@@ -235,6 +254,30 @@ const ConsorcioDetalhes = () => {
                     </Typography>
                   </Box>
                 </Box>
+
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <AttachMoney sx={{ mr: 2, color: 'text.secondary' }} />
+                  <Box>
+                    <Typography variant="body2" color="text.secondary">
+                      Taxa do Gestor (Mensal)
+                    </Typography>
+                    <Typography variant="body1">
+                      R$ {(consorcio.taxa_gestor || 0).toLocaleString('pt-BR')}
+                    </Typography>
+                  </Box>
+                </Box>
+
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <AttachMoney sx={{ mr: 2, color: 'text.secondary' }} />
+                  <Box>
+                    <Typography variant="body2" color="text.secondary">
+                      Acréscimo Mensal
+                    </Typography>
+                    <Typography variant="body1">
+                      R$ {(consorcio.acrescimo_mensal || 0).toLocaleString('pt-BR')}
+                    </Typography>
+                  </Box>
+                </Box>
               </Box>
 
               <Divider sx={{ my: 2 }} />
@@ -339,6 +382,11 @@ const ConsorcioDetalhes = () => {
         </Grid>
       </Grid>
 
+      {/* Timeline do Consórcio */}
+      <Box sx={{ mt: 4 }}>
+        <ConsorcioTimeline consorcioId={id} />
+      </Box>
+
       {/* Dialog Adicionar Participante */}
       <Dialog 
         open={addParticipanteOpen} 
@@ -368,18 +416,27 @@ const ConsorcioDetalhes = () => {
               label="Número de Cotas"
               type="number"
               value={participanteData.numero_cotas}
-              onChange={(e) => setParticipanteData({ ...participanteData, numero_cotas: parseFloat(e.target.value) })}
+              onChange={(e) => {
+                const novoNumeroCotas = parseFloat(e.target.value) || 0;
+                const novoMontante = calcularMontanteIndividual(novoNumeroCotas);
+                setParticipanteData({ 
+                  ...participanteData, 
+                  numero_cotas: novoNumeroCotas,
+                  montante_individual: novoMontante
+                });
+              }}
               inputProps={{ min: 0.5, max: 3, step: 0.5 }}
               helperText="De 0.5 a 3.0 cotas"
             />
 
             <TextField
-              label="Montante Individual"
-              value={participanteData.montante_individual}
-              onChange={(e) => setParticipanteData({ ...participanteData, montante_individual: e.target.value })}
+              label="Montante Individual Mensal"
+              value={participanteData.montante_individual ? parseFloat(participanteData.montante_individual).toLocaleString('pt-BR') : '0,00'}
               InputProps={{
                 startAdornment: <InputAdornment position="start">R$</InputAdornment>,
+                readOnly: true,
               }}
+              helperText="Calculado automaticamente"
             />
           </Box>
         </DialogContent>

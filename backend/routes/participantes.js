@@ -3,6 +3,7 @@ const Joi = require('joi');
 const { Op } = require('sequelize');
 const { Participante, Consorcio, ConsorcioParticipante } = require('../models');
 const authenticateToken = require('../middleware/auth');
+const { calcularMontanteMensalProgressivo } = require('../utils/calculoMensal');
 
 const router = express.Router();
 
@@ -20,7 +21,9 @@ const updateParticipanteSchema = Joi.object({
 
 router.get('/', authenticateToken, async (req, res) => {
   try {
-    const { page = 1, limit = 10, search = '' } = req.query;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const search = req.query.search || '';
     const offset = (page - 1) * limit;
 
     const whereClause = {
@@ -28,7 +31,7 @@ router.get('/', authenticateToken, async (req, res) => {
       ativo: true
     };
 
-    if (search) {
+    if (search && search.trim()) {
       whereClause[Op.or] = [
         { nome: { [Op.like]: `%${search}%` } },
         { telefone: { [Op.like]: `%${search}%` } }
@@ -37,8 +40,8 @@ router.get('/', authenticateToken, async (req, res) => {
 
     const { count, rows: participantes } = await Participante.findAndCountAll({
       where: whereClause,
-      limit: parseInt(limit),
-      offset: parseInt(offset),
+      limit: limit,
+      offset: offset,
       include: [
         {
           model: Consorcio,
@@ -54,9 +57,9 @@ router.get('/', authenticateToken, async (req, res) => {
       participantes,
       pagination: {
         total: count,
-        page: parseInt(page),
+        page: page,
         pages: Math.ceil(count / limit),
-        limit: parseInt(limit)
+        limit: limit
       }
     });
   } catch (error) {
@@ -204,6 +207,69 @@ router.delete('/:id', authenticateToken, async (req, res) => {
     res.json({ message: 'Participante removido com sucesso' });
   } catch (error) {
     console.error('Erro ao remover participante:', error);
+    res.status(500).json({ message: 'Erro interno do servidor' });
+  }
+});
+
+// Nova rota para obter montantes mensais progressivos
+router.get('/:id/montantes-mensais', authenticateToken, async (req, res) => {
+  try {
+    const participante = await Participante.findOne({
+      where: {
+        id: req.params.id,
+        gestorId: req.gestor.id,
+        ativo: true
+      }
+    });
+
+    if (!participante) {
+      return res.status(404).json({ message: 'Participante não encontrado' });
+    }
+
+    // Buscar todos os consórcios ativos do participante
+    const associacoes = await ConsorcioParticipante.findAll({
+      where: {
+        participanteId: participante.id,
+        ativo: true
+      },
+      include: [
+        {
+          model: Consorcio,
+          as: 'consorcio',
+          where: { ativo: true },
+          attributes: ['id', 'nome', 'montante_total', 'taxa_gestor', 'acrescimo_mensal', 'prazo_meses', 'numero_cotas', 'data_inicio']
+        }
+      ]
+    });
+
+    const montantesMensais = associacoes.map(associacao => {
+      const consorcio = associacao.consorcio;
+      const montanteMensal = calcularMontanteMensalProgressivo(consorcio, associacao);
+      
+      return {
+        consorcioId: consorcio.id,
+        consorcioNome: consorcio.nome,
+        numeroCotas: associacao.numero_cotas,
+        montanteMensal,
+        dataInicio: consorcio.data_inicio,
+        prazoMeses: consorcio.prazo_meses,
+        status: associacao.status_pagamento,
+        contemplado: associacao.contemplado,
+        mesContemplacao: associacao.mes_contemplacao
+      };
+    });
+
+    res.json({
+      participante: {
+        id: participante.id,
+        nome: participante.nome,
+        telefone: participante.telefone
+      },
+      montantesMensais
+    });
+
+  } catch (error) {
+    console.error('Erro ao calcular montantes mensais:', error);
     res.status(500).json({ message: 'Erro interno do servidor' });
   }
 });

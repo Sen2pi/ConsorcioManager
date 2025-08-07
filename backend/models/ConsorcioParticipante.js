@@ -57,6 +57,22 @@ const ConsorcioParticipante = sequelize.define('ConsorcioParticipante', {
   ativo: {
     type: DataTypes.BOOLEAN,
     defaultValue: true
+  },
+  status_pagamento: {
+    type: DataTypes.ENUM('em_dia', 'em_atraso', 'contemplado'),
+    defaultValue: 'em_dia'
+  },
+  mes_contemplacao: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    validate: {
+      min: 1,
+      max: 120
+    }
+  },
+  contemplado: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false
   }
 }, {
   tableName: 'consorcio_participantes',
