@@ -1,7 +1,6 @@
 <div align="center">
   <img src="logo.png" alt="Consórcio Gestão" width="200" height="200" />
-  
-  # Consórcio Manager
+
   
   [![Made with React](https://img.shields.io/badge/Made%20with-React-61DAFB.svg?logo=react)](https://reactjs.org/)
   [![Made with Express](https://img.shields.io/badge/Made%20with-Express-000000.svg?logo=express)](https://expressjs.com/)
