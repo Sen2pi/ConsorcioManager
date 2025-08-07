@@ -17,17 +17,15 @@ const calcularMontanteMensalProgressivo = (consorcio, participante, mesAtual = n
     mesAtual = Math.max(1, Math.min(prazoMeses, diffMonths + 1));
   }
   
-  // Cálculo do montante base por cota
-  const montanteBasePorCota = montanteTotal / numeroTotalCotas;
+  // Cálculo do valor base por cota: (montante total + taxa gestor total) / número total de cotas
+  const montanteComTaxaGestor = montanteTotal + (taxaGestorMensal * prazoMeses);
+  const valorBasePorCota = montanteComTaxaGestor / numeroTotalCotas;
   
-  // Cálculo do acréscimo progressivo baseado no mês atual
+  // Cálculo do acréscimo progressivo: aumenta a cada mês
   const acrescimoProgressivo = acrescimoMensalBase * (mesAtual - 1);
   
-  // Cálculo da taxa do gestor por cota
-  const taxaGestorPorCota = (taxaGestorMensal / numeroTotalCotas);
-  
   // Montante mensal para este participante
-  const montanteMensal = (montanteBasePorCota + acrescimoProgressivo + taxaGestorPorCota) * numeroCotas;
+  const montanteMensal = (valorBasePorCota + acrescimoProgressivo) * numeroCotas;
   
   return Math.round(montanteMensal * 100) / 100; // Arredondar para 2 casas decimais
 };
@@ -41,14 +39,12 @@ const calcularMontanteFixoMensal = (consorcio, participante) => {
   const numeroTotalCotas = parseInt(consorcio.numero_cotas) || 1;
   const numeroCotas = parseFloat(participante.numero_cotas) || 1;
   
-  // Cálculo do montante base por cota
-  const montanteBasePorCota = montanteTotal / numeroTotalCotas;
-  
-  // Cálculo da taxa do gestor por cota
-  const taxaGestorPorCota = (taxaGestorMensal / numeroTotalCotas);
+  // Cálculo do valor base por cota: (montante total + taxa gestor total) / número total de cotas
+  const montanteComTaxaGestor = montanteTotal + (taxaGestorMensal * prazoMeses);
+  const valorBasePorCota = montanteComTaxaGestor / numeroTotalCotas;
   
   // Montante mensal fixo para este participante
-  const montanteMensal = (montanteBasePorCota + taxaGestorPorCota) * numeroCotas;
+  const montanteMensal = valorBasePorCota * numeroCotas;
   
   return Math.round(montanteMensal * 100) / 100; // Arredondar para 2 casas decimais
 };

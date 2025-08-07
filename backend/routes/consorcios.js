@@ -196,7 +196,41 @@ router.put('/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ message: 'Consórcio não encontrado' });
     }
 
+    // Verificar se os campos que afetam o cálculo foram alterados
+    const camposCalculo = ['montante_total', 'prazo_meses', 'numero_cotas', 'taxa_gestor', 'acrescimo_mensal'];
+    const camposAlterados = camposCalculo.filter(campo => req.body[campo] !== undefined);
+    
     await consorcio.update(req.body);
+
+    // Se campos que afetam o cálculo foram alterados, recalcular valores individuais
+    if (camposAlterados.length > 0) {
+      const { calcularMontanteFixoMensal } = require('../utils/calculoMensal');
+      
+      // Buscar todos os participantes ativos do consórcio
+      const participantes = await ConsorcioParticipante.findAll({
+        where: {
+          consorcioId: consorcio.id,
+          ativo: true
+        },
+        include: [
+          {
+            model: Participante,
+            attributes: ['id', 'nome']
+          }
+        ]
+      });
+
+      // Recalcular valores individuais para cada participante
+      for (const associacao of participantes) {
+        const novoValorIndividual = calcularMontanteFixoMensal(consorcio, associacao);
+        
+        await associacao.update({
+          montante_individual: novoValorIndividual
+        });
+      }
+
+      console.log(`Recalculados valores individuais para ${participantes.length} participantes`);
+    }
 
     res.json({
       message: 'Consórcio atualizado com sucesso',
@@ -274,21 +308,32 @@ router.post('/:id/participantes', authenticateToken, async (req, res) => {
         return res.status(409).json({ message: 'Participante já está neste consórcio' });
       } else {
         // Se o participante estava inativo, reativar
+        const { calcularMontanteFixoMensal } = require('../utils/calculoMensal');
+        const novoValorIndividual = calcularMontanteFixoMensal(consorcio, {
+          numero_cotas: numero_cotas
+        });
+        
         await associacaoExistente.update({ 
           ativo: true, 
           data_saida: null,
           numero_cotas,
-          montante_individual
+          montante_individual: novoValorIndividual
         });
         return res.status(200).json({ message: 'Participante readicionado ao consórcio com sucesso' });
       }
     }
 
+    // Calcular valor individual para o novo participante
+    const { calcularMontanteFixoMensal } = require('../utils/calculoMensal');
+    const valorIndividual = calcularMontanteFixoMensal(consorcio, {
+      numero_cotas: numero_cotas
+    });
+
     await ConsorcioParticipante.create({
       consorcioId: consorcio.id,
       participanteId: participante.id,
       numero_cotas,
-      montante_individual
+      montante_individual: valorIndividual
     });
 
     res.status(201).json({ message: 'Participante adicionado ao consórcio com sucesso' });

@@ -67,17 +67,37 @@ const ConsorcioDetalhes = () => {
     
     const montanteTotal = parseFloat(consorcio.montante_total) || 0;
     const taxaGestorMensal = parseFloat(consorcio.taxa_gestor) || 0;
+    const prazoMeses = parseInt(consorcio.prazo_meses) || 1;
+    const numeroTotalCotas = parseInt(consorcio.numero_cotas) || 1;
+    
+    // Cálculo correto: (montante total + taxa gestor total) / número total de cotas * cotas do participante
+    const montanteComTaxaGestor = montanteTotal + (taxaGestorMensal * prazoMeses);
+    const valorPorCota = montanteComTaxaGestor / numeroTotalCotas;
+    const valorIndividual = valorPorCota * numeroCotas;
+    
+    return valorIndividual.toFixed(2);
+  };
+
+  const calcularMontanteProgressivo = (numeroCotas, mes) => {
+    if (!consorcio || !numeroCotas || !mes) return 0;
+    
+    const montanteTotal = parseFloat(consorcio.montante_total) || 0;
+    const taxaGestorMensal = parseFloat(consorcio.taxa_gestor) || 0;
     const acrescimoMensal = parseFloat(consorcio.acrescimo_mensal) || 0;
     const prazoMeses = parseInt(consorcio.prazo_meses) || 1;
     const numeroTotalCotas = parseInt(consorcio.numero_cotas) || 1;
     
-    // (montante total + (taxa gestor mensal * numero de meses)) dividido por numero total cotas * cotas do participante + acréscimo mensal
-    const montanteComTaxa = montanteTotal + (taxaGestorMensal * prazoMeses);
-    const valorPorCota = montanteComTaxa / numeroTotalCotas;
-    const valorMensalBase = valorPorCota * numeroCotas;
-    const valorFinal = valorMensalBase + (acrescimoMensal * numeroCotas);
+    // Cálculo base: (montante total + taxa gestor total) / número total de cotas
+    const montanteComTaxaGestor = montanteTotal + (taxaGestorMensal * prazoMeses);
+    const valorBasePorCota = montanteComTaxaGestor / numeroTotalCotas;
     
-    return valorFinal.toFixed(2);
+    // Acréscimo progressivo: aumenta a cada mês
+    const acrescimoProgressivo = acrescimoMensal * (mes - 1);
+    
+    // Montante mensal para este participante
+    const montanteMensal = (valorBasePorCota + acrescimoProgressivo) * numeroCotas;
+    
+    return montanteMensal.toFixed(2);
   };
 
   const { data, isLoading, error } = useQuery(
@@ -455,29 +475,49 @@ const ConsorcioDetalhes = () => {
             <TextField
               label="Número de Cotas"
               type="number"
+              inputProps={{ min: 0.5, max: 3, step: 0.5 }}
               value={participanteData.numero_cotas}
               onChange={(e) => {
-                const novoNumeroCotas = parseFloat(e.target.value) || 0;
-                const novoMontante = calcularMontanteIndividual(novoNumeroCotas);
+                const valor = parseFloat(e.target.value);
                 setParticipanteData({ 
                   ...participanteData, 
-                  numero_cotas: novoNumeroCotas,
-                  montante_individual: novoMontante
+                  numero_cotas: valor,
+                  montante_individual: calcularMontanteIndividual(valor)
                 });
               }}
-              inputProps={{ min: 0.5, max: 3, step: 0.5 }}
-              helperText="De 0.5 a 3.0 cotas"
             />
 
             <TextField
-              label="Montante Individual Mensal"
-              value={participanteData.montante_individual ? parseFloat(participanteData.montante_individual).toLocaleString('pt-BR') : '0,00'}
+              label="Valor Individual"
+              type="number"
+              value={participanteData.montante_individual}
+              onChange={(e) => setParticipanteData({ ...participanteData, montante_individual: e.target.value })}
               InputProps={{
                 startAdornment: <InputAdornment position="start">R$</InputAdornment>,
-                readOnly: true,
               }}
-              helperText="Calculado automaticamente"
             />
+
+            {/* Seção de cálculo progressivo */}
+            {participanteData.numero_cotas > 0 && (
+              <Box sx={{ mt: 2, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+                <Typography variant="subtitle2" gutterBottom>
+                  Cálculo Progressivo por Mês (exemplo com {participanteData.numero_cotas} cotas):
+                </Typography>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                  {[1, 2, 3, 4, 5, 6].map((mes) => (
+                    <Chip
+                      key={mes}
+                      label={`Mês ${mes}: R$ ${calcularMontanteProgressivo(participanteData.numero_cotas, mes)}`}
+                      size="small"
+                      variant="outlined"
+                    />
+                  ))}
+                </Box>
+                <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                  O valor aumenta progressivamente a cada mês conforme o acréscimo mensal configurado.
+                </Typography>
+              </Box>
+            )}
           </Box>
         </DialogContent>
         <DialogActions>
