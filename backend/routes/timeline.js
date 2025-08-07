@@ -43,6 +43,23 @@ router.get('/consorcios/:id/timeline', authenticateToken, async (req, res) => {
       include: [{ model: Participante, attributes: ['nome'] }]
     });
 
+    // Agrupar participantes contemplados por mês
+    const participantesContemplados = participantes.filter(p => p.contemplado);
+    const contemplacoesPorMes = {};
+
+    for (const participante of participantesContemplados) {
+      const mes = participante.mes_contemplacao;
+      if (!contemplacoesPorMes[mes]) {
+        contemplacoesPorMes[mes] = [];
+      }
+      contemplacoesPorMes[mes].push({
+        id: participante.participanteId,
+        nome: participante.Participante.nome,
+        cotas: participante.numero_cotas,
+        contemplacaoId: contemplacoes.find(c => c.participanteId === participante.participanteId && c.mes_contemplacao === mes)?.id
+      });
+    }
+
     const totalCotas = participantes.reduce((sum, p) => sum + parseFloat(p.numero_cotas), 0);
     const cotasPreenchidas = totalCotas; // Usar o total de cotas, não o número de participantes
     const cotasDisponiveis = consorcio.numero_cotas - cotasPreenchidas;
@@ -53,6 +70,7 @@ router.get('/consorcios/:id/timeline', authenticateToken, async (req, res) => {
     res.json({
       consorcio,
       contemplacoes,
+      contemplacoesPorMes,
       resumo: {
         totalCotas,
         cotasPreenchidas,
@@ -364,6 +382,7 @@ router.put('/contemplacoes/:id', authenticateToken, async (req, res) => {
 router.delete('/contemplacoes/:id', authenticateToken, async (req, res) => {
   try {
     const contemplacao = await Contemplacao.findByPk(req.params.id);
+
     if (!contemplacao) {
       return res.status(404).json({ message: 'Contemplação não encontrada' });
     }
@@ -380,20 +399,31 @@ router.delete('/contemplacoes/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ message: 'Consórcio não encontrado' });
     }
 
-    // Atualizar participante
-    await ConsorcioParticipante.update(
-      { 
-        contemplado: false, 
-        mes_contemplacao: null,
-        status_pagamento: 'em_dia'
-      },
-      {
-        where: {
-          consorcioId: consorcio.id,
-          participanteId: contemplacao.participanteId
-        }
+    // Encontrar todos os participantes contemplados no mesmo mês
+    const participantesContemplados = await ConsorcioParticipante.findAll({
+      where: {
+        consorcioId: consorcio.id,
+        mes_contemplacao: contemplacao.mes_contemplacao,
+        contemplado: true
       }
-    );
+    });
+
+    // Atualizar todos os participantes contemplados no mesmo mês
+    for (const participante of participantesContemplados) {
+      await ConsorcioParticipante.update(
+        { 
+          contemplado: false, 
+          mes_contemplacao: null,
+          status_pagamento: 'em_dia'
+        },
+        {
+          where: {
+            consorcioId: consorcio.id,
+            participanteId: participante.participanteId
+          }
+        }
+      );
+    }
 
     // Remover contemplação
     await contemplacao.destroy();
@@ -420,15 +450,29 @@ router.post('/consorcios/:id/auto-contemplar', authenticateToken, async (req, re
       return res.status(404).json({ message: 'Consórcio não encontrado' });
     }
 
-    const participantes = await ConsorcioParticipante.findAll({
+    // Buscar TODOS os participantes ativos (incluindo já contemplados para debug)
+    const todosParticipantes = await ConsorcioParticipante.findAll({
       where: {
         consorcioId: consorcio.id,
-        ativo: true,
-        contemplado: false
+        ativo: true
       },
-      include: [{ model: Participante, attributes: ['nome'] }],
-      order: [['numero_cotas', 'DESC']] // Ordenar por número de cotas (maior primeiro)
+      include: [{ model: Participante, attributes: ['nome'] }]
     });
+
+    console.log('Todos os participantes:', todosParticipantes.map(p => ({
+      nome: p.Participante.nome,
+      cotas: p.numero_cotas,
+      contemplado: p.contemplado,
+      mes: p.mes_contemplacao
+    })));
+
+    // Filtrar apenas não contemplados
+    const participantes = todosParticipantes.filter(p => !p.contemplado);
+
+    console.log('Participantes não contemplados:', participantes.map(p => ({
+      nome: p.Participante.nome,
+      cotas: p.numero_cotas
+    })));
 
     if (participantes.length === 0) {
       return res.status(400).json({ 
@@ -436,153 +480,210 @@ router.post('/consorcios/:id/auto-contemplar', authenticateToken, async (req, re
       });
     }
 
-    const contemplacoesGeradas = [];
-    let mesAtual = 1;
+    // Calcular total de cotas disponíveis
+    const totalCotas = participantes.reduce((sum, p) => sum + parseFloat(p.numero_cotas), 0);
+    
+    console.log('Total de cotas disponíveis:', totalCotas);
+    console.log('Prazo do consórcio:', consorcio.prazo_meses);
+    
+    if (totalCotas > consorcio.prazo_meses) {
+      return res.status(400).json({ 
+        message: `Total de cotas (${totalCotas}) excede o prazo do consórcio (${consorcio.prazo_meses} meses)` 
+      });
+    }
 
-    // Primeiro, contemplar participantes com 2 cotas (auto-contemplados)
+    // Separar participantes por tipo de cota
+    const participantesCotasInteiras = [];
+    const participantesCotasFracionarias = [];
+
     for (const participante of participantes) {
-      if (parseFloat(participante.numero_cotas) === 2.0) {
-        // Verificar se o mês já está ocupado
-        while (await Contemplacao.findOne({
-          where: { consorcioId: consorcio.id, mes_contemplacao: mesAtual }
-        })) {
-          mesAtual++;
+      const numeroCotas = parseFloat(participante.numero_cotas);
+      console.log(`Participante ${participante.Participante.nome}: ${numeroCotas} cotas`);
+      
+      if (numeroCotas >= 1.0) {
+        // Participantes com 1 ou mais cotas
+        const cotasInteiras = Math.floor(numeroCotas);
+        for (let i = 0; i < cotasInteiras; i++) {
+          participantesCotasInteiras.push({
+            participante: participante,
+            cotas: 1.0
+          });
         }
+        
+        // Se há fração, adicionar como fracionária
+        const fracao = numeroCotas - cotasInteiras;
+        if (fracao > 0) {
+          participantesCotasFracionarias.push({
+            participante: participante,
+            cotas: fracao
+          });
+        }
+      } else {
+        // Participantes com menos de 1 cota (ex: 0.5)
+        participantesCotasFracionarias.push({
+          participante: participante,
+          cotas: numeroCotas
+        });
+      }
+    }
 
-        if (mesAtual <= consorcio.prazo_meses) {
+    console.log('Participantes com cotas inteiras:', participantesCotasInteiras.map(p => ({
+      nome: p.participante.Participante.nome,
+      cotas: p.cotas
+    })));
+
+    console.log('Participantes com cotas fracionárias:', participantesCotasFracionarias.map(p => ({
+      nome: p.participante.Participante.nome,
+      cotas: p.cotas
+    })));
+
+    // Embaralhar listas
+    const cotasInteirasEmbaralhadas = participantesCotasInteiras.sort(() => Math.random() - 0.5);
+    const cotasFracionariasEmbaralhadas = participantesCotasFracionarias.sort(() => Math.random() - 0.5);
+
+    // Criar lista de meses disponíveis
+    const mesesDisponiveis = Array.from({ length: consorcio.prazo_meses }, (_, i) => i + 1);
+    const mesesEmbaralhados = mesesDisponiveis.sort(() => Math.random() - 0.5);
+
+    console.log('Meses embaralhados:', mesesEmbaralhados);
+
+    const contemplacoesGeradas = [];
+    let mesIndex = 0;
+
+    // Primeiro, contemplar participantes com cotas inteiras
+    for (const participanteCota of cotasInteirasEmbaralhadas) {
+      if (mesIndex >= mesesEmbaralhados.length) break;
+
+      const mesContemplacao = mesesEmbaralhados[mesIndex];
+      console.log(`Contemplando ${participanteCota.participante.Participante.nome} (${participanteCota.cotas} cotas) no mês ${mesContemplacao}`);
+
+      const dataInicio = new Date(consorcio.data_inicio);
+      const dataContemplacao = new Date(dataInicio);
+      dataContemplacao.setMonth(dataInicio.getMonth() + mesContemplacao - 1);
+
+      const contemplacao = await Contemplacao.create({
+        consorcioId: consorcio.id,
+        participanteId: participanteCota.participante.participanteId,
+        mes_contemplacao: mesContemplacao,
+        data_contemplacao: dataContemplacao,
+        valor_contemplado: consorcio.montante_total,
+        tipo_contemplacao: 'automatico'
+      });
+
+      await ConsorcioParticipante.update(
+        { 
+          contemplado: true, 
+          mes_contemplacao: mesContemplacao,
+          status_pagamento: 'contemplado'
+        },
+        {
+          where: {
+            consorcioId: consorcio.id,
+            participanteId: participanteCota.participante.participanteId
+          }
+        }
+      );
+
+      contemplacoesGeradas.push(contemplacao);
+      mesIndex++;
+    }
+
+    // Depois, agrupar participantes com cotas fracionárias
+    let grupoAtual = [];
+    let cotasAcumuladas = 0;
+
+    for (const participanteCota of cotasFracionariasEmbaralhadas) {
+      if (cotasAcumuladas + participanteCota.cotas <= 1.0 && grupoAtual.length < 2) {
+        // Adicionar ao grupo atual
+        grupoAtual.push(participanteCota);
+        cotasAcumuladas += participanteCota.cotas;
+      } else {
+        // Grupo está completo ou não cabe mais, salvar e começar novo
+        if (grupoAtual.length > 0) {
+          if (mesIndex >= mesesEmbaralhados.length) break;
+
+          const mesContemplacao = mesesEmbaralhados[mesIndex];
+          console.log(`Contemplando grupo no mês ${mesContemplacao}:`, grupoAtual.map(p => p.participante.Participante.nome));
+
           const dataInicio = new Date(consorcio.data_inicio);
           const dataContemplacao = new Date(dataInicio);
-          dataContemplacao.setMonth(dataInicio.getMonth() + mesAtual - 1);
+          dataContemplacao.setMonth(dataInicio.getMonth() + mesContemplacao - 1);
 
+          // Criar contemplação para o primeiro participante do grupo
           const contemplacao = await Contemplacao.create({
             consorcioId: consorcio.id,
-            participanteId: participante.participanteId,
-            mes_contemplacao: mesAtual,
+            participanteId: grupoAtual[0].participante.participanteId,
+            mes_contemplacao: mesContemplacao,
             data_contemplacao: dataContemplacao,
             valor_contemplado: consorcio.montante_total,
             tipo_contemplacao: 'automatico'
           });
 
-          await ConsorcioParticipante.update(
-            { 
-              contemplado: true, 
-              mes_contemplacao: mesAtual,
-              status_pagamento: 'contemplado'
-            },
-            {
-              where: {
-                consorcioId: consorcio.id,
-                participanteId: participante.participanteId
+          // Atualizar todos os participantes do grupo
+          for (const participante of grupoAtual) {
+            await ConsorcioParticipante.update(
+              { 
+                contemplado: true, 
+                mes_contemplacao: mesContemplacao,
+                status_pagamento: 'contemplado'
+              },
+              {
+                where: {
+                  consorcioId: consorcio.id,
+                  participanteId: participante.participante.participanteId
+                }
               }
-            }
-          );
+            );
+          }
 
           contemplacoesGeradas.push(contemplacao);
-          mesAtual++;
-        }
-      }
-    }
-
-    // Depois, agrupar participantes com 0.5 cotas (máximo 2 por contemplação)
-    const participantesMeiaCota = participantes.filter(p => parseFloat(p.numero_cotas) === 0.5);
-    const gruposMeiaCota = [];
-    
-    for (let i = 0; i < participantesMeiaCota.length; i += 2) {
-      const grupo = participantesMeiaCota.slice(i, i + 2);
-      if (grupo.length > 0) {
-        gruposMeiaCota.push(grupo);
-      }
-    }
-
-    // Contemplar grupos de 0.5 cotas
-    for (const grupo of gruposMeiaCota) {
-      // Verificar se o mês já está ocupado
-      while (await Contemplacao.findOne({
-        where: { consorcioId: consorcio.id, mes_contemplacao: mesAtual }
-      })) {
-        mesAtual++;
-      }
-
-      if (mesAtual <= consorcio.prazo_meses) {
-        const dataInicio = new Date(consorcio.data_inicio);
-        const dataContemplacao = new Date(dataInicio);
-        dataContemplacao.setMonth(dataInicio.getMonth() + mesAtual - 1);
-
-        // Criar contemplação para o primeiro participante do grupo
-        const contemplacao = await Contemplacao.create({
-          consorcioId: consorcio.id,
-          participanteId: grupo[0].participanteId,
-          mes_contemplacao: mesAtual,
-          data_contemplacao: dataContemplacao,
-          valor_contemplado: consorcio.montante_total,
-          tipo_contemplacao: 'automatico'
-        });
-
-        // Atualizar todos os participantes do grupo
-        for (const participante of grupo) {
-          await ConsorcioParticipante.update(
-            { 
-              contemplado: true, 
-              mes_contemplacao: mesAtual,
-              status_pagamento: 'contemplado'
-            },
-            {
-              where: {
-                consorcioId: consorcio.id,
-                participanteId: participante.participanteId
-              }
-            }
-          );
+          mesIndex++;
         }
 
-        contemplacoesGeradas.push(contemplacao);
-        mesAtual++;
+        // Começar novo grupo
+        grupoAtual = [participanteCota];
+        cotasAcumuladas = participanteCota.cotas;
       }
     }
 
-    // Por fim, contemplar participantes com 1 cota (contemplação normal)
-    const participantesUmaCota = participantes.filter(p => parseFloat(p.numero_cotas) === 1.0);
-    
-    for (const participante of participantesUmaCota) {
-      // Verificar se o mês já está ocupado
-      while (await Contemplacao.findOne({
-        where: { consorcioId: consorcio.id, mes_contemplacao: mesAtual }
-      })) {
-        mesAtual++;
-      }
+    // Processar último grupo se não estiver vazio
+    if (grupoAtual.length > 0 && mesIndex < mesesEmbaralhados.length) {
+      const mesContemplacao = mesesEmbaralhados[mesIndex];
+      console.log(`Contemplando último grupo no mês ${mesContemplacao}:`, grupoAtual.map(p => p.participante.Participante.nome));
 
-      if (mesAtual <= consorcio.prazo_meses) {
-        const dataInicio = new Date(consorcio.data_inicio);
-        const dataContemplacao = new Date(dataInicio);
-        dataContemplacao.setMonth(dataInicio.getMonth() + mesAtual - 1);
+      const dataInicio = new Date(consorcio.data_inicio);
+      const dataContemplacao = new Date(dataInicio);
+      dataContemplacao.setMonth(dataInicio.getMonth() + mesContemplacao - 1);
 
-        const contemplacao = await Contemplacao.create({
-          consorcioId: consorcio.id,
-          participanteId: participante.participanteId,
-          mes_contemplacao: mesAtual,
-          data_contemplacao: dataContemplacao,
-          valor_contemplado: consorcio.montante_total,
-          tipo_contemplacao: 'automatico'
-        });
+      const contemplacao = await Contemplacao.create({
+        consorcioId: consorcio.id,
+        participanteId: grupoAtual[0].participante.participanteId,
+        mes_contemplacao: mesContemplacao,
+        data_contemplacao: dataContemplacao,
+        valor_contemplado: consorcio.montante_total,
+        tipo_contemplacao: 'automatico'
+      });
 
+      for (const participante of grupoAtual) {
         await ConsorcioParticipante.update(
           { 
             contemplado: true, 
-            mes_contemplacao: mesAtual,
+            mes_contemplacao: mesContemplacao,
             status_pagamento: 'contemplado'
           },
           {
             where: {
               consorcioId: consorcio.id,
-              participanteId: participante.participanteId
+              participanteId: participante.participante.participanteId
             }
           }
         );
-
-        contemplacoesGeradas.push(contemplacao);
-        mesAtual++;
       }
+
+      contemplacoesGeradas.push(contemplacao);
     }
+
+    console.log('Contemplações geradas:', contemplacoesGeradas.length);
 
     res.json({
       message: `${contemplacoesGeradas.length} contemplações geradas automaticamente`,

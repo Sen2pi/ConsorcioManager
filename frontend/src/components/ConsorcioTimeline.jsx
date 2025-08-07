@@ -82,6 +82,9 @@ const ConsorcioTimeline = ({ consorcioId }) => {
         setContemplacaoDialog(false);
         setContemplacaoData({ participanteId: '', tipo_contemplacao: 'automatico', valor_lance: '', observacoes: '' });
         queryClient.invalidateQueries(['consorcio-timeline', consorcioId]);
+        queryClient.invalidateQueries(['consorcio-participantes', consorcioId]);
+        queryClient.invalidateQueries(['participantes-montantes']);
+        queryClient.invalidateQueries('consorcios');
       },
       onError: (error) => {
         enqueueSnackbar(
@@ -100,6 +103,9 @@ const ConsorcioTimeline = ({ consorcioId }) => {
       onSuccess: (response) => {
         enqueueSnackbar(response.data.message, { variant: 'success' });
         queryClient.invalidateQueries(['consorcio-timeline', consorcioId]);
+        queryClient.invalidateQueries(['consorcio-participantes', consorcioId]);
+        queryClient.invalidateQueries(['participantes-montantes']);
+        queryClient.invalidateQueries('consorcios');
       },
       onError: (error) => {
         enqueueSnackbar(
@@ -139,6 +145,9 @@ const ConsorcioTimeline = ({ consorcioId }) => {
         setEditContemplacaoDialog(false);
         setEditingContemplacao(null);
         queryClient.invalidateQueries(['consorcio-timeline', consorcioId]);
+        queryClient.invalidateQueries(['consorcio-participantes', consorcioId]);
+        queryClient.invalidateQueries(['participantes-montantes']);
+        queryClient.invalidateQueries('consorcios');
       },
       onError: (error) => {
         enqueueSnackbar(
@@ -157,6 +166,9 @@ const ConsorcioTimeline = ({ consorcioId }) => {
       onSuccess: () => {
         enqueueSnackbar('Contemplação removida com sucesso!', { variant: 'success' });
         queryClient.invalidateQueries(['consorcio-timeline', consorcioId]);
+        queryClient.invalidateQueries(['consorcio-participantes', consorcioId]);
+        queryClient.invalidateQueries(['participantes-montantes']);
+        queryClient.invalidateQueries('consorcios');
       },
       onError: (error) => {
         enqueueSnackbar(
@@ -223,7 +235,7 @@ const ConsorcioTimeline = ({ consorcioId }) => {
   if (isLoading) return <LinearProgress />;
   if (!timelineData) return <Alert severity="error">Erro ao carregar dados</Alert>;
 
-  const { consorcio, resumo, contemplacoes, participantes } = timelineData;
+  const { consorcio, resumo, contemplacoes, contemplacoesPorMes, participantes } = timelineData;
 
   // Criar array de meses
   const meses = Array.from({ length: consorcio.prazo_meses }, (_, i) => i + 1);
@@ -308,6 +320,7 @@ const ConsorcioTimeline = ({ consorcioId }) => {
 
           {meses.map((mes) => {
             const contemplacao = contemplacoes.find(c => c.mes_contemplacao === mes);
+            const participantesContemplados = contemplacoesPorMes[mes] || [];
             const dataInicio = new Date(consorcio.data_inicio);
             const dataMes = new Date(dataInicio.getFullYear(), dataInicio.getMonth() + mes - 1, 1);
             const mesNome = dataMes.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
@@ -319,6 +332,7 @@ const ConsorcioTimeline = ({ consorcioId }) => {
                 mesNome={mesNome}
                 consorcioId={consorcioId}
                 contemplacao={contemplacao}
+                participantesContemplados={participantesContemplados}
                 participantes={participantes}
                 onContemplar={() => handleContemplar(mes)}
                 onMarcarPagamento={(pagamentoId, valor) => 
@@ -465,7 +479,7 @@ const ConsorcioTimeline = ({ consorcioId }) => {
   );
 };
 
-const MesAccordion = ({ mes, mesNome, consorcioId, contemplacao, participantes, onContemplar, onMarcarPagamento, onEditContemplacao, onDeleteContemplacao }) => {
+const MesAccordion = ({ mes, mesNome, consorcioId, contemplacao, participantesContemplados, participantes, onContemplar, onMarcarPagamento, onEditContemplacao, onDeleteContemplacao }) => {
   const [pagamentos, setPagamentos] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -504,14 +518,17 @@ const MesAccordion = ({ mes, mesNome, consorcioId, contemplacao, participantes, 
             Mês {mes} - {mesNome}
           </Typography>
           
-          {contemplacao ? (
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Chip
-                icon={<EmojiEvents />}
-                label={`Contemplado: ${contemplacao.Participante?.nome}`}
-                color="success"
-                size="small"
-              />
+          {participantesContemplados.length > 0 ? (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+              {participantesContemplados.map((participante, index) => (
+                <Chip
+                  key={participante.id}
+                  icon={<EmojiEvents />}
+                  label={`Contemplado: ${participante.nome} (${participante.cotas} cotas)`}
+                  color="success"
+                  size="small"
+                />
+              ))}
               <IconButton
                 size="small"
                 color="primary"
