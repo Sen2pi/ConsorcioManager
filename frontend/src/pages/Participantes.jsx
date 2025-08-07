@@ -67,6 +67,34 @@ const Participantes = () => {
     }
   );
 
+  // Query para buscar montantes mensais progressivos dos participantes
+  const { data: montantesMensais } = useQuery(
+    ['participantes-montantes'],
+    async () => {
+      const promises = data?.participantes?.map(async (participante) => {
+        try {
+          const response = await api.get(`/participantes/${participante.id}/montantes-mensais`);
+          return {
+            participanteId: participante.id,
+            montantes: response.data.montantesMensais
+          };
+        } catch (error) {
+          console.error(`Erro ao buscar montantes para participante ${participante.id}:`, error);
+          return {
+            participanteId: participante.id,
+            montantes: []
+          };
+        }
+      }) || [];
+      
+      const results = await Promise.all(promises);
+      return results;
+    },
+    {
+      enabled: !!data?.participantes,
+    }
+  );
+
   const deleteMutation = useMutation(
     (id) => api.delete(`/participantes/${id}`),
     {
@@ -172,19 +200,20 @@ const Participantes = () => {
                 <TableCell>Telefone</TableCell>
                 <TableCell>PIX/IBAN</TableCell>
                 <TableCell>Consórcios</TableCell>
+                <TableCell>Montante Mensal Total</TableCell>
                 <TableCell align="right">Ações</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={5} align="center" sx={{ py: 4 }}>
+                  <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
                     <CircularProgress />
                   </TableCell>
                 </TableRow>
               ) : participantes.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} align="center" sx={{ py: 4 }}>
+                  <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
                     <Typography color="text.secondary">
                       Nenhum participante encontrado
                     </Typography>
@@ -241,6 +270,20 @@ const Participantes = () => {
                           </Typography>
                         )}
                       </Box>
+                    </TableCell>
+                    <TableCell>
+                      {(() => {
+                        const montantesParticipante = montantesMensais?.find(m => m.participanteId === participante.id);
+                        const totalMensal = montantesParticipante?.montantes?.reduce((total, montante) => {
+                          return total + (montante.montanteMensal || 0);
+                        }, 0) || 0;
+                        
+                        return (
+                          <Typography variant="body2" fontWeight="bold" color="primary">
+                            R$ {totalMensal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </Typography>
+                        );
+                      })()}
                     </TableCell>
                     <TableCell align="right">
                       <IconButton

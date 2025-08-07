@@ -235,15 +235,31 @@ router.get('/:id/montantes-mensais', authenticateToken, async (req, res) => {
       include: [
         {
           model: Consorcio,
-          as: 'consorcio',
-          where: { ativo: true },
+          where: { status: 'ativo' },
           attributes: ['id', 'nome', 'montante_total', 'taxa_gestor', 'acrescimo_mensal', 'prazo_meses', 'numero_cotas', 'data_inicio']
         }
       ]
     });
 
+    // Calcular montantes mensais progressivos
     const montantesMensais = associacoes.map(associacao => {
-      const consorcio = associacao.consorcio;
+      const consorcio = associacao.Consorcio;
+      
+      if (!consorcio) {
+        return {
+          consorcioId: null,
+          consorcioNome: 'Consórcio não encontrado',
+          numeroCotas: associacao.numero_cotas,
+          montanteMensal: 0,
+          dataInicio: null,
+          prazoMeses: 0,
+          status: associacao.status_pagamento,
+          contemplado: associacao.contemplado,
+          mesContemplacao: associacao.mes_contemplacao
+        };
+      }
+      
+      // Usar a função de cálculo progressivo
       const montanteMensal = calcularMontanteMensalProgressivo(consorcio, associacao);
       
       return {

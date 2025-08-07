@@ -3,6 +3,7 @@ const Joi = require('joi');
 const { Op } = require('sequelize');
 const { Consorcio, Participante, ConsorcioParticipante, Gestor } = require('../models');
 const authenticateToken = require('../middleware/auth');
+const { calcularMontanteMensalProgressivo } = require('../utils/calculoMensal');
 
 const router = express.Router();
 
@@ -264,13 +265,23 @@ router.post('/:id/participantes', authenticateToken, async (req, res) => {
     const associacaoExistente = await ConsorcioParticipante.findOne({
       where: {
         consorcioId: consorcio.id,
-        participanteId: participante.id,
-        ativo: true
+        participanteId: participante.id
       }
     });
 
     if (associacaoExistente) {
-      return res.status(409).json({ message: 'Participante já está neste consórcio' });
+      if (associacaoExistente.ativo) {
+        return res.status(409).json({ message: 'Participante já está neste consórcio' });
+      } else {
+        // Se o participante estava inativo, reativar
+        await associacaoExistente.update({ 
+          ativo: true, 
+          data_saida: null,
+          numero_cotas,
+          montante_individual
+        });
+        return res.status(200).json({ message: 'Participante readicionado ao consórcio com sucesso' });
+      }
     }
 
     await ConsorcioParticipante.create({
@@ -336,6 +347,72 @@ router.delete('/:id/participantes/:participanteId', authenticateToken, async (re
     res.json({ message: 'Participante removido do consórcio com sucesso' });
   } catch (error) {
     console.error('Erro ao remover participante do consórcio:', error);
+    res.status(500).json({ message: 'Erro interno do servidor' });
+  }
+});
+
+// Rota para listar participantes de um consórcio com montantes mensais
+router.get('/:id/participantes', authenticateToken, async (req, res) => {
+  try {
+    const consorcio = await Consorcio.findOne({
+      where: {
+        id: req.params.id,
+        gestorId: req.gestor.id
+      }
+    });
+
+    if (!consorcio) {
+      return res.status(404).json({ message: 'Consórcio não encontrado' });
+    }
+
+    const participantes = await ConsorcioParticipante.findAll({
+      where: {
+        consorcioId: consorcio.id,
+        ativo: true
+      },
+      include: [
+        {
+          model: Participante,
+          attributes: ['id', 'nome', 'telefone', 'pix_iban']
+        }
+      ],
+      order: [['Participante', 'nome', 'ASC']]
+    });
+
+    const participantesComMontantes = participantes.map(associacao => {
+      const montanteMensal = calcularMontanteMensalProgressivo(consorcio, associacao);
+      
+      return {
+        id: associacao.Participante.id,
+        nome: associacao.Participante.nome,
+        telefone: associacao.Participante.telefone,
+        pix_iban: associacao.Participante.pix_iban,
+        numero_cotas: associacao.numero_cotas,
+        montante_individual: associacao.montante_individual,
+        montante_mensal_progressivo: montanteMensal,
+        data_entrada: associacao.data_entrada,
+        contemplado: associacao.contemplado,
+        mes_contemplacao: associacao.mes_contemplacao,
+        status_pagamento: associacao.status_pagamento
+      };
+    });
+
+    res.json({
+      consorcio: {
+        id: consorcio.id,
+        nome: consorcio.nome,
+        montante_total: consorcio.montante_total,
+        taxa_gestor: consorcio.taxa_gestor,
+        acrescimo_mensal: consorcio.acrescimo_mensal,
+        prazo_meses: consorcio.prazo_meses,
+        numero_cotas: consorcio.numero_cotas,
+        data_inicio: consorcio.data_inicio
+      },
+      participantes: participantesComMontantes
+    });
+
+  } catch (error) {
+    console.error('Erro ao buscar participantes do consórcio:', error);
     res.status(500).json({ message: 'Erro interno do servidor' });
   }
 });

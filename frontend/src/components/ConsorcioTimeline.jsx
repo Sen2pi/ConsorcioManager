@@ -41,7 +41,9 @@ import {
   EmojiEvents,
   Payment,
   AutoMode,
-  PersonAdd
+  PersonAdd,
+  Edit,
+  Delete
 } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
 import api from '../services/api';
@@ -51,7 +53,9 @@ const ConsorcioTimeline = ({ consorcioId }) => {
   const queryClient = useQueryClient();
   
   const [contemplacaoDialog, setContemplacaoDialog] = useState(false);
+  const [editContemplacaoDialog, setEditContemplacaoDialog] = useState(false);
   const [selectedMes, setSelectedMes] = useState(null);
+  const [editingContemplacao, setEditingContemplacao] = useState(null);
   const [contemplacaoData, setContemplacaoData] = useState({
     participanteId: '',
     tipo_contemplacao: 'automatico',
@@ -125,6 +129,44 @@ const ConsorcioTimeline = ({ consorcioId }) => {
     }
   );
 
+  const editContemplacaoMutation = useMutation(
+    async ({ contemplacaoId, data }) => {
+      return await api.put(`/timeline/contemplacoes/${contemplacaoId}`, data);
+    },
+    {
+      onSuccess: () => {
+        enqueueSnackbar('Contemplação atualizada com sucesso!', { variant: 'success' });
+        setEditContemplacaoDialog(false);
+        setEditingContemplacao(null);
+        queryClient.invalidateQueries(['consorcio-timeline', consorcioId]);
+      },
+      onError: (error) => {
+        enqueueSnackbar(
+          error.response?.data?.message || 'Erro ao atualizar contemplação',
+          { variant: 'error' }
+        );
+      }
+    }
+  );
+
+  const deleteContemplacaoMutation = useMutation(
+    async (contemplacaoId) => {
+      return await api.delete(`/timeline/contemplacoes/${contemplacaoId}`);
+    },
+    {
+      onSuccess: () => {
+        enqueueSnackbar('Contemplação removida com sucesso!', { variant: 'success' });
+        queryClient.invalidateQueries(['consorcio-timeline', consorcioId]);
+      },
+      onError: (error) => {
+        enqueueSnackbar(
+          error.response?.data?.message || 'Erro ao remover contemplação',
+          { variant: 'error' }
+        );
+      }
+    }
+  );
+
   const handleContemplar = (mes) => {
     setSelectedMes(mes);
     setContemplacaoDialog(true);
@@ -140,6 +182,31 @@ const ConsorcioTimeline = ({ consorcioId }) => {
       ...contemplacaoData,
       mes_contemplacao: selectedMes,
       valor_lance: contemplacaoData.valor_lance ? parseFloat(contemplacaoData.valor_lance) : undefined
+    });
+  };
+
+  const handleEditContemplacao = (contemplacao) => {
+    setEditingContemplacao(contemplacao);
+    setContemplacaoData({
+      participanteId: contemplacao.participanteId,
+      mes_contemplacao: contemplacao.mes_contemplacao,
+      tipo_contemplacao: contemplacao.tipo_contemplacao || 'automatico',
+      valor_lance: contemplacao.valor_lance || '',
+      observacoes: contemplacao.observacoes || ''
+    });
+    setEditContemplacaoDialog(true);
+  };
+
+  const handleDeleteContemplacao = (contemplacaoId) => {
+    if (window.confirm('Tem certeza que deseja remover esta contemplação?')) {
+      deleteContemplacaoMutation.mutate(contemplacaoId);
+    }
+  };
+
+  const handleSubmitEditContemplacao = () => {
+    editContemplacaoMutation.mutate({
+      contemplacaoId: editingContemplacao.id,
+      data: contemplacaoData
     });
   };
 
@@ -257,6 +324,8 @@ const ConsorcioTimeline = ({ consorcioId }) => {
                 onMarcarPagamento={(pagamentoId, valor) => 
                   marcarPagamentoMutation.mutate({ pagamentoId, valor })
                 }
+                onEditContemplacao={() => handleEditContemplacao(contemplacao)}
+                onDeleteContemplacao={() => handleDeleteContemplacao(contemplacao?.id)}
               />
             );
           })}
@@ -327,11 +396,76 @@ const ConsorcioTimeline = ({ consorcioId }) => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Dialog de Edição de Contemplação */}
+      <Dialog open={editContemplacaoDialog} onClose={() => setEditContemplacaoDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Editar Contemplação - Mês {editingContemplacao?.mes_contemplacao}</DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+            <FormControl fullWidth>
+              <InputLabel>Participante</InputLabel>
+              <Select
+                value={contemplacaoData.participanteId}
+                label="Participante"
+                onChange={(e) => setContemplacaoData({ ...contemplacaoData, participanteId: e.target.value })}
+              >
+                {participantes
+                  .filter(p => !p.contemplado)
+                  .map((p) => (
+                    <MenuItem key={p.participanteId} value={p.participanteId}>
+                      {p.Participante.nome}
+                    </MenuItem>
+                  ))}
+              </Select>
+            </FormControl>
+
+            <FormControl fullWidth>
+              <InputLabel>Tipo de Contemplação</InputLabel>
+              <Select
+                value={contemplacaoData.tipo_contemplacao}
+                label="Tipo de Contemplação"
+                onChange={(e) => setContemplacaoData({ ...contemplacaoData, tipo_contemplacao: e.target.value })}
+              >
+                <MenuItem value="automatico">Automático</MenuItem>
+                <MenuItem value="sorteio">Sorteio</MenuItem>
+                <MenuItem value="lance">Lance</MenuItem>
+              </Select>
+            </FormControl>
+
+            {contemplacaoData.tipo_contemplacao === 'lance' && (
+              <TextField
+                label="Valor do Lance"
+                type="number"
+                value={contemplacaoData.valor_lance}
+                onChange={(e) => setContemplacaoData({ ...contemplacaoData, valor_lance: e.target.value })}
+              />
+            )}
+
+            <TextField
+              label="Observações"
+              multiline
+              rows={3}
+              value={contemplacaoData.observacoes}
+              onChange={(e) => setContemplacaoData({ ...contemplacaoData, observacoes: e.target.value })}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditContemplacaoDialog(false)}>Cancelar</Button>
+          <Button 
+            onClick={handleSubmitEditContemplacao}
+            variant="contained"
+            disabled={editContemplacaoMutation.isLoading}
+          >
+            Salvar Edição
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };
 
-const MesAccordion = ({ mes, mesNome, consorcioId, contemplacao, participantes, onContemplar, onMarcarPagamento }) => {
+const MesAccordion = ({ mes, mesNome, consorcioId, contemplacao, participantes, onContemplar, onMarcarPagamento, onEditContemplacao, onDeleteContemplacao }) => {
   const [pagamentos, setPagamentos] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -371,12 +505,28 @@ const MesAccordion = ({ mes, mesNome, consorcioId, contemplacao, participantes, 
           </Typography>
           
           {contemplacao ? (
-            <Chip
-              icon={<EmojiEvents />}
-              label={`Contemplado: ${contemplacao.Participante?.nome}`}
-              color="success"
-              size="small"
-            />
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Chip
+                icon={<EmojiEvents />}
+                label={`Contemplado: ${contemplacao.Participante?.nome}`}
+                color="success"
+                size="small"
+              />
+              <IconButton
+                size="small"
+                color="primary"
+                onClick={onEditContemplacao}
+              >
+                <Edit />
+              </IconButton>
+              <IconButton
+                size="small"
+                color="error"
+                onClick={onDeleteContemplacao}
+              >
+                <Delete />
+              </IconButton>
+            </Box>
           ) : (
             <Button
               size="small"

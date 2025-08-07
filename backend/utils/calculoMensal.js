@@ -34,21 +34,23 @@ const calcularMontanteMensalProgressivo = (consorcio, participante, mesAtual = n
 
 const calcularMontanteFixoMensal = (consorcio, participante) => {
   if (!consorcio || !participante) return 0;
-
+  
   const montanteTotal = parseFloat(consorcio.montante_total) || 0;
   const taxaGestorMensal = parseFloat(consorcio.taxa_gestor) || 0;
-  const acrescimoMensal = parseFloat(consorcio.acrescimo_mensal) || 0;
   const prazoMeses = parseInt(consorcio.prazo_meses) || 1;
   const numeroTotalCotas = parseInt(consorcio.numero_cotas) || 1;
   const numeroCotas = parseFloat(participante.numero_cotas) || 1;
-
-  // Cálculo fixo original
-  const montanteComTaxaGestor = montanteTotal + (taxaGestorMensal * prazoMeses);
-  const valorBasePorCota = montanteComTaxaGestor / numeroTotalCotas;
-  const valorMensalBase = valorBasePorCota * numeroCotas;
-  const valorFinal = valorMensalBase + (acrescimoMensal * numeroCotas);
-
-  return valorFinal;
+  
+  // Cálculo do montante base por cota
+  const montanteBasePorCota = montanteTotal / numeroTotalCotas;
+  
+  // Cálculo da taxa do gestor por cota
+  const taxaGestorPorCota = (taxaGestorMensal / numeroTotalCotas);
+  
+  // Montante mensal fixo para este participante
+  const montanteMensal = (montanteBasePorCota + taxaGestorPorCota) * numeroCotas;
+  
+  return Math.round(montanteMensal * 100) / 100; // Arredondar para 2 casas decimais
 };
 
 module.exports = {

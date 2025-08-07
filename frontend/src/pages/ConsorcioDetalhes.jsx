@@ -89,7 +89,7 @@ const ConsorcioDetalhes = () => {
   );
 
   const { data: participantesDisponiveis } = useQuery(
-    'participantes-disponiveis',
+    ['participantes-disponiveis', id],
     async () => {
       const response = await api.get('/participantes');
       return response.data;
@@ -99,11 +99,26 @@ const ConsorcioDetalhes = () => {
     }
   );
 
+  // Nova query para buscar participantes com montantes mensais progressivos
+  const { data: participantesComMontantes, isLoading: isLoadingParticipantes } = useQuery(
+    ['consorcio-participantes', id],
+    async () => {
+      console.log('Buscando participantes do consórcio:', id);
+      const response = await api.get(`/consorcios/${id}/participantes`);
+      console.log('Resposta da API:', response.data);
+      return response.data;
+    },
+    {
+      enabled: !!data,
+    }
+  );
+
   const addParticipanteMutation = useMutation(
     (data) => api.post(`/consorcios/${id}/participantes`, data),
     {
       onSuccess: () => {
         queryClient.invalidateQueries(['consorcio', id]);
+        queryClient.invalidateQueries(['consorcio-participantes', id]);
         enqueueSnackbar('Participante adicionado com sucesso!', { variant: 'success' });
         setAddParticipanteOpen(false);
         setParticipanteData({
@@ -126,6 +141,7 @@ const ConsorcioDetalhes = () => {
     {
       onSuccess: () => {
         queryClient.invalidateQueries(['consorcio', id]);
+        queryClient.invalidateQueries(['consorcio-participantes', id]);
         enqueueSnackbar('Participante removido com sucesso!', { variant: 'success' });
         setRemoveConfirm(null);
       },
@@ -321,7 +337,7 @@ const ConsorcioDetalhes = () => {
             <CardContent>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                 <Typography variant="h6">
-                  Participantes ({consorcio.participantes?.length || 0})
+                  Participantes ({participantesComMontantes?.participantes?.length || 0})
                 </Typography>
                 <Button
                   variant="outlined"
@@ -333,7 +349,11 @@ const ConsorcioDetalhes = () => {
                 </Button>
               </Box>
               
-              {consorcio.participantes?.length === 0 ? (
+              {isLoadingParticipantes ? (
+                <Box display="flex" justifyContent="center" py={2}>
+                  <CircularProgress size={24} />
+                </Box>
+              ) : !participantesComMontantes?.participantes || participantesComMontantes.participantes.length === 0 ? (
                 <Typography color="text.secondary" textAlign="center" py={2}>
                   Nenhum participante neste consórcio
                 </Typography>
@@ -343,13 +363,16 @@ const ConsorcioDetalhes = () => {
                     <TableHead>
                       <TableRow>
                         <TableCell>Nome</TableCell>
+                        <TableCell>Telefone</TableCell>
                         <TableCell>Cotas</TableCell>
-                        <TableCell>Valor</TableCell>
+                        <TableCell>Valor Individual</TableCell>
+                        <TableCell>Montante Mensal Progressivo</TableCell>
+                        <TableCell>Status</TableCell>
                         <TableCell align="right">Ações</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {consorcio.participantes?.map((participante) => (
+                      {participantesComMontantes?.participantes?.map((participante) => (
                         <TableRow key={participante.id}>
                           <TableCell>
                             <Typography variant="body2">
@@ -357,10 +380,27 @@ const ConsorcioDetalhes = () => {
                             </Typography>
                           </TableCell>
                           <TableCell>
-                            {participante.ConsorcioParticipante?.numero_cotas}
+                            <Typography variant="body2">
+                              {participante.telefone}
+                            </Typography>
                           </TableCell>
                           <TableCell>
-                            R$ {participante.ConsorcioParticipante?.montante_individual?.toLocaleString('pt-BR')}
+                            {participante.numero_cotas}
+                          </TableCell>
+                          <TableCell>
+                            R$ {participante.montante_individual?.toLocaleString('pt-BR')}
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2" fontWeight="bold" color="primary">
+                              R$ {participante.montante_mensal_progressivo?.toLocaleString('pt-BR')}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              label={participante.contemplado ? 'Contemplado' : 'Em Dia'}
+                              color={participante.contemplado ? 'success' : 'default'}
+                              size="small"
+                            />
                           </TableCell>
                           <TableCell align="right">
                             <IconButton
