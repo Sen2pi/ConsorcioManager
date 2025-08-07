@@ -1,6 +1,22 @@
-# Consórcio Manager
+<div align="center">
+  <img src="logo.png" alt="Consórcio Gestão" width="200" height="200" />
+  
+  # Consórcio Manager
+  
+  [![Made with React](https://img.shields.io/badge/Made%20with-React-61DAFB.svg?logo=react)](https://reactjs.org/)
+  [![Made with Express](https://img.shields.io/badge/Made%20with-Express-000000.svg?logo=express)](https://expressjs.com/)
+  [![Database](https://img.shields.io/badge/Database-MySQL-4479A1.svg?logo=mysql&logoColor=white)](https://mysql.com/)
+  [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+  [![Node Version](https://img.shields.io/badge/Node-16+-339933.svg?logo=node.js&logoColor=white)](https://nodejs.org/)
+  [![Tests](https://img.shields.io/badge/Tests-Jest-C21325.svg?logo=jest)](https://jestjs.io/)
+  
+  Uma aplicação completa para gestão de consórcios, desenvolvida com React + Material UI no frontend e Express + MySQL no backend.
+  
+  [Demo](#) • [Documentação](#) • [Reportar Bug](../../issues) • [Solicitar Feature](../../issues)
+  
+</div>
 
-Uma aplicação completa para gestão de consórcios, desenvolvida com React + Material UI no frontend e Express + MySQL no backend.
+---
 
 ## 🚀 Características
 
@@ -12,22 +28,38 @@ Uma aplicação completa para gestão de consórcios, desenvolvida com React + M
 - **Interface Responsiva** - Design moderno com Material UI
 - **Validação de Dados** - Validação tanto no frontend quanto no backend
 
-## 🛠 Tecnologias Utilizadas
+## 🛠 Stack Tecnológico
 
-### Backend
-- **Node.js** com Express
-- **MySQL** como banco de dados
-- **Sequelize** como ORM
-- **JWT** para autenticação
-- **Bcrypt** para hash de senhas
-- **Joi** para validação de dados
-
-### Frontend
-- **React** com Vite
-- **Material UI** para componentes
-- **React Query** para gerenciamento de estado
-- **React Router** para navegação
-- **Axios** para requisições HTTP
+<table>
+  <tr>
+    <th>Frontend</th>
+    <th>Backend</th>
+    <th>Database</th>
+    <th>DevOps</th>
+  </tr>
+  <tr>
+    <td>
+      <img src="https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white" alt="React" /><br>
+      <img src="https://img.shields.io/badge/Material--UI-5-007FFF?logo=mui&logoColor=white" alt="MUI" /><br>
+      <img src="https://img.shields.io/badge/Vite-4-646CFF?logo=vite&logoColor=white" alt="Vite" /><br>
+      <img src="https://img.shields.io/badge/React_Query-3-FF4154?logo=reactquery&logoColor=white" alt="React Query" />
+    </td>
+    <td>
+      <img src="https://img.shields.io/badge/Node.js-16+-339933?logo=node.js&logoColor=white" alt="Node.js" /><br>
+      <img src="https://img.shields.io/badge/Express-4-000000?logo=express&logoColor=white" alt="Express" /><br>
+      <img src="https://img.shields.io/badge/JWT-Auth-000000?logo=jsonwebtokens&logoColor=white" alt="JWT" /><br>
+      <img src="https://img.shields.io/badge/Bcrypt-Security-CA4245?logo=letsencrypt&logoColor=white" alt="Bcrypt" />
+    </td>
+    <td>
+      <img src="https://img.shields.io/badge/MySQL-8-4479A1?logo=mysql&logoColor=white" alt="MySQL" /><br>
+      <img src="https://img.shields.io/badge/Sequelize-6-52B0E7?logo=sequelize&logoColor=white" alt="Sequelize" />
+    </td>
+    <td>
+      <img src="https://img.shields.io/badge/Jest-Testing-C21325?logo=jest&logoColor=white" alt="Jest" /><br>
+      <img src="https://img.shields.io/badge/Git-Version_Control-F05032?logo=git&logoColor=white" alt="Git" />
+    </td>
+  </tr>
+</table>
 
 ## 📋 Pré-requisitos
 
@@ -90,21 +122,43 @@ Copie o arquivo `.env.example` para `.env`:
 cp .env.example .env
 ```
 
-## 🚀 Executando a Aplicação
+## 🚀 Quick Start
 
-### Backend
+### 🏃‍♂️ Executar em modo desenvolvimento
+
+#### Terminal 1 - Backend
 ```bash
 cd backend
+npm install
 npm run dev
 ```
-Servidor rodará em: http://localhost:5000
+🌐 **Backend**: http://localhost:5000
 
-### Frontend
+#### Terminal 2 - Frontend  
 ```bash
 cd frontend
+npm install
 npm run dev
 ```
-Aplicação rodará em: http://localhost:3000
+🎨 **Frontend**: http://localhost:3000
+
+### 📦 Scripts Disponíveis
+
+#### Backend
+```bash
+npm start          # Produção
+npm run dev        # Desenvolvimento com nodemon
+npm test           # Executar testes
+npm run test:watch # Testes em modo watch
+npm run init-db    # Inicializar banco de dados
+```
+
+#### Frontend
+```bash
+npm run dev        # Servidor de desenvolvimento
+npm run build      # Build para produção
+npm run preview    # Preview do build
+```
 
 ## 📱 Funcionalidades
 
@@ -184,4 +238,18 @@ Se você encontrar algum problema, por favor abra uma issue no repositório.
 
 ---
 
-⭐ Se este projeto foi útil para você, considere dar uma estrela!
+<div align="center">
+  
+  ### ⭐ Se este projeto foi útil, considere dar uma estrela!
+  
+  <a href="#top">🔝 Voltar ao topo</a>
+  
+  ---
+  
+  **Feito com ❤️ para gestão de consórcios**
+  
+  ![Visitors](https://visitor-badge.laobi.icu/badge?page_id=consorcio-manager.readme)
+  [![GitHub forks](https://img.shields.io/github/forks/username/ConsorcioManager?style=social)](../../network/members)
+  [![GitHub stars](https://img.shields.io/github/stars/username/ConsorcioManager?style=social)](../../stargazers)
+  
+</div>

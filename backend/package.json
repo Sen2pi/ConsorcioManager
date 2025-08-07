@@ -10,6 +10,7 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "test:ci": "jest --ci --coverage --watchAll=false",
+    "setup-test": "node setup-test-db.js",
     "init-db": "node scripts/initDatabase.js"
   },
   "dependencies": {
