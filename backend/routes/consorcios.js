@@ -205,6 +205,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
     // Se campos que afetam o cálculo foram alterados, recalcular valores individuais
     if (camposAlterados.length > 0) {
       const { calcularMontanteFixoMensal } = require('../utils/calculoMensal');
+      const PagamentoService = require('../services/pagamentoService');
       
       // Buscar todos os participantes ativos do consórcio
       const participantes = await ConsorcioParticipante.findAll({
@@ -229,7 +230,10 @@ router.put('/:id', authenticateToken, async (req, res) => {
         });
       }
 
-      console.log(`Recalculados valores individuais para ${participantes.length} participantes`);
+      // Recriar pagamentos com novos valores
+      await PagamentoService.recriarPagamentosConsorcio(consorcio.id);
+
+      console.log(`Recalculados valores individuais e pagamentos para ${participantes.length} participantes`);
     }
 
     res.json({

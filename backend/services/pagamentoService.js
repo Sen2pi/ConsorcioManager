@@ -34,10 +34,12 @@ class PagamentoService {
           dataVencimento.setMonth(dataInicio.getMonth() + mes - 1);
           dataVencimento.setDate(8); // Dia 8 de cada mês
 
-          // Calcular valor com acréscimo mensal
+          // Calcular valor progressivo: valor base + taxa gestor + (acréscimo mensal * (mes - 1))
           const valorBase = participante.montante_individual;
+          const taxaGestor = consorcio.taxa_gestor || 0;
           const acrescimoMensal = consorcio.acrescimo_mensal || 0;
-          const valorComAcrescimo = parseFloat(valorBase) + parseFloat(acrescimoMensal);
+          const acrescimoProgressivo = acrescimoMensal * (mes - 1);
+          const valorComAcrescimo = parseFloat(valorBase) + parseFloat(taxaGestor) + parseFloat(acrescimoProgressivo);
 
           const pagamento = await Pagamento.create({
             consorcioId,
@@ -54,6 +56,22 @@ class PagamentoService {
     }
 
     return pagamentosGerados;
+  }
+
+  // Recriar pagamentos para um consórcio (quando valores são alterados)
+  static async recriarPagamentosConsorcio(consorcioId) {
+    const consorcio = await Consorcio.findByPk(consorcioId);
+    if (!consorcio) {
+      throw new Error('Consórcio não encontrado');
+    }
+
+    // Remover todos os pagamentos existentes
+    await Pagamento.destroy({
+      where: { consorcioId }
+    });
+
+    // Gerar novos pagamentos com valores atualizados
+    return await this.gerarPagamentosConsorcio(consorcioId);
   }
 
   // Verificar e atualizar status de pagamentos em atraso

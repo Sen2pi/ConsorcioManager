@@ -21,11 +21,17 @@ const calcularMontanteMensalProgressivo = (consorcio, participante, mesAtual = n
   const montanteComTaxaGestor = montanteTotal + (taxaGestorMensal * prazoMeses);
   const valorBasePorCota = montanteComTaxaGestor / numeroTotalCotas;
   
+  // Valor base para este participante
+  const valorBase = valorBasePorCota * numeroCotas;
+  
+  // Taxa do gestor mensal para este participante (valor fixo mensal)
+  const taxaGestorParticipante = taxaGestorMensal * numeroCotas;
+  
   // Cálculo do acréscimo progressivo: aumenta a cada mês
   const acrescimoProgressivo = acrescimoMensalBase * (mesAtual - 1);
   
   // Montante mensal para este participante
-  const montanteMensal = (valorBasePorCota + acrescimoProgressivo) * numeroCotas;
+  const montanteMensal = valorBase + taxaGestorParticipante + acrescimoProgressivo;
   
   return Math.round(montanteMensal * 100) / 100; // Arredondar para 2 casas decimais
 };

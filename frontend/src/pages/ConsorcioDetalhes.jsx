@@ -91,11 +91,17 @@ const ConsorcioDetalhes = () => {
     const montanteComTaxaGestor = montanteTotal + (taxaGestorMensal * prazoMeses);
     const valorBasePorCota = montanteComTaxaGestor / numeroTotalCotas;
     
+    // Valor base para este participante
+    const valorBase = valorBasePorCota * numeroCotas;
+    
+    // Taxa do gestor mensal para este participante
+    const taxaGestorParticipante = taxaGestorMensal * numeroCotas;
+    
     // Acréscimo progressivo: aumenta a cada mês
     const acrescimoProgressivo = acrescimoMensal * (mes - 1);
     
     // Montante mensal para este participante
-    const montanteMensal = (valorBasePorCota + acrescimoProgressivo) * numeroCotas;
+    const montanteMensal = valorBase + taxaGestorParticipante + acrescimoProgressivo;
     
     return montanteMensal.toFixed(2);
   };
